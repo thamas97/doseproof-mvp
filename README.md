@@ -9,6 +9,8 @@ This is a starter workspace and detailed implementation runbook. It does not yet
 ## Start here
 
 - [Complete runbook](docs/runbook.md)
+- [Word runbook](docs/DoseProof_Three_Person_MVP_Runbook.docx) and [matching PDF](docs/DoseProof_Three_Person_MVP_Runbook.pdf)
+- [Confluence runbook and downloads](https://mail-team-bpbflevn.atlassian.net/wiki/spaces/D/pages/4161538)
 - [Daily task index](docs/task-index.md)
 - [AI prompt pack](docs/ai-prompts.md)
 - [Shared contract brief](contracts/README.md)

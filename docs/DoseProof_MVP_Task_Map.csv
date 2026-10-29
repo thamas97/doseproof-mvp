@@ -1,0 +1,19 @@
+﻿Plan ID,Jira key,Owner,Reviewer,Date,Primary layer,Task,Estimate hours,Dependencies
+TR-D1,DPM-9,Tranos,Thabani,2026-10-29,1,Build the baseline plant and first FUXA connection,4,
+EM-D1,DPM-10,Emmanuel,Tranos,2026-10-29,2,Collect source copies and validate the first envelope,4,
+TH-D1,DPM-11,Thabani,Emmanuel,2026-10-29,6,Prepare shared contracts and durable raw storage,4,
+TR-D2,DPM-12,Tranos,Thabani,2026-10-30,1,Add named request approval and command response,4,"DPM-9, DPM-10, DPM-11"
+EM-D2,DPM-13,Emmanuel,Tranos,2026-10-30,3,Normalize link and explain the baseline path,4,"DPM-10, DPM-11, DPM-9"
+TH-D2,DPM-14,Thabani,Emmanuel,2026-10-30,7,Expose saved evidence and the first complete dashboard path,4,"DPM-11, DPM-10, DPM-9"
+TR-D3,DPM-15,Tranos,Thabani,2026-10-31,1,Exercise approved and labelled lab unapproved changes,4,"DPM-12, DPM-13, DPM-14"
+EM-D3,DPM-16,Emmanuel,Tranos,2026-10-31,4,Complete action chains and approval response rules,4,"DPM-13, DPM-12, DPM-14"
+TH-D3,DPM-17,Thabani,Emmanuel,2026-10-31,8,Show action trails and explained results,4,"DPM-14, DPM-13, DPM-12"
+TR-D4,DPM-18,Tranos,Thabani,2026-11-01,1,Add stopped pump and missing Sensor A cases,4,"DPM-15, DPM-16, DPM-17"
+EM-D4,DPM-19,Emmanuel,Tranos,2026-11-01,5,Explain equipment faults and unreliable monitoring,4,"DPM-16, DPM-15, DPM-17"
+TH-D4,DPM-20,Thabani,Emmanuel,2026-11-01,8,Add source health alerts and freeze features,4,"DPM-17, DPM-16, DPM-15"
+TR-D5,DPM-21,Tranos,Thabani,2026-11-02,1,Verify restart reset repeatability and observer protection,4,"DPM-18, DPM-19, DPM-20"
+EM-D5,DPM-22,Emmanuel,Tranos,2026-11-02,3,Test errors duplicates retries and monitoring gaps,4,"DPM-19, DPM-18, DPM-20"
+TH-D5,DPM-23,Thabani,Emmanuel,2026-11-02,7,Check persistence read only boundaries and the candidate,4,"DPM-20, DPM-19, DPM-18"
+TR-D6,DPM-24,Tranos,Thabani,2026-11-03,1,Perform independent startup and capture plant evidence,4,"DPM-21, DPM-22, DPM-23"
+EM-D6,DPM-25,Emmanuel,Tranos,2026-11-03,5,Audit findings and prepare evidence explanations,4,"DPM-22, DPM-21, DPM-23"
+TH-D6,DPM-26,Thabani,Emmanuel,2026-11-03,8,Package the MVP and rehearse the professor review,4,"DPM-23, DPM-22, DPM-21"
