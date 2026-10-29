@@ -1,0 +1,24 @@
+{
+  "scenario_id": "baseline",
+  "purpose": "Educational simulation only",
+  "tick_seconds": 1,
+  "flow_l_s": 10.0,
+  "requested_feed_mg_s": 15.0,
+  "accepted_feed_mg_s": 15.0,
+  "demand_mg_l": 0.5,
+  "initial_residual_mg_l": 1.0,
+  "response_delay_ticks": 4,
+  "response_fraction_per_tick": 0.2,
+  "pump_running": true,
+  "delivery_factor": 1.0,
+  "sensor_a": {
+    "source_id": "sensor-a",
+    "seed": 101,
+    "noise_bound_mg_l": 0.01
+  },
+  "sensor_b": {
+    "source_id": "sensor-b",
+    "seed": 202,
+    "noise_bound_mg_l": 0.01
+  }
+}

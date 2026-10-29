@@ -1,0 +1,16 @@
+.venv/
+.venv-*/
+__pycache__/
+.pytest_cache/
+node_modules/
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.log
+evidence/*
+!evidence/README.md
+!evidence/result-template.md
+fuxa/state/

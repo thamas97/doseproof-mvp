@@ -1,0 +1,3 @@
+# MVP instructions for coding assistants
+
+Read README.md, contracts/README.md, docs/runbook.md and the current DPM card before editing. Preserve the separation of source evidence and derived findings. Sensors read modeled water, not controller settings. DoseProof is passive and has no usable command credentials or write route. Treat fixtures as fixtures. Never fabricate successful tests, actual screenshots, approval records or reviewer agreement. Do not silently change shared contracts. Keep edits limited to the assigned task; run meaningful checks and report actual output. Do not close Jira tasks or merge without the human workflow.

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:doseproof:mvp:event:0.1",
+  "title": "MVP source event envelope",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "event_id",
+    "source_id",
+    "source_seq",
+    "event_type",
+    "source_timestamp_utc",
+    "emitted_at_utc",
+    "sim_step",
+    "change_id",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_id": {
+      "enum": [
+        "operator-desk",
+        "controller",
+        "plant-model",
+        "sensor-a",
+        "sensor-b"
+      ]
+    },
+    "source_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_type": {
+      "enum": [
+        "dose_request",
+        "dose_approval",
+        "command",
+        "acknowledgement",
+        "plant_feedback",
+        "sensor_observation",
+        "lab_action",
+        "source_heartbeat"
+      ]
+    },
+    "source_timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "emitted_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sim_step": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "change_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "sensor_observation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": [
+              "equipment_id",
+              "value",
+              "unit",
+              "quality"
+            ],
+            "properties": {
+              "equipment_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "const": "mg/L"
+              },
+              "quality": {
+                "enum": [
+                  "good",
+                  "uncertain",
+                  "bad"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
