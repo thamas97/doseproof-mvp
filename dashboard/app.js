@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let busy = false;
 const text = (tag, value, cls) => { const e = document.createElement(tag); e.textContent = value; if (cls) e.className = cls; return e; };
-async function get(path) { const r = await fetch(path, {cache:'no-store'}); const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Evidence API unavailable'); return data; }
+async function get(path) { const r = await fetch(path, {cache:'no-store',signal:AbortSignal.timeout(4000)}); const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Evidence API unavailable'); return data; }
 function link(id, label) { const b = text('button', label, 'link'); b.addEventListener('click', async () => {
   try { const r = await get('/api/receipts/'+encodeURIComponent(id)); const bytes = Uint8Array.from(atob(r.original_body_base64), c=>c.charCodeAt(0));
     $('receipt').textContent = JSON.stringify({...r, original_body_utf8_preview: new TextDecoder('utf-8',{fatal:false}).decode(bytes)},null,2);
@@ -40,7 +40,9 @@ async function refresh() {
     for(const value of [e.sim_step,e.source_timestamp_utc,row.received_at_utc])tr.append(text('td',value));const proof=document.createElement('td');proof.append(link(row.receipt_id,'Original'));tr.append(proof);$('events').append(tr);}
   $('errors').replaceChildren(); if(!errors.items.length)$('errors').append(text('p','No recorded validation or identity issues.','muted'));
   for(const error of errors.items) {const div=text('div',error.code+': '+error.message+' ','issue');div.append(link(error.receipt_id,'Retained original'));$('errors').append(div);}
- } catch(e) { $('connection').textContent='Evidence unavailable';$('alerts').textContent='Evidence API unavailable. Existing values may be old. '+e.message; }
+ } catch(e) { $('connection').textContent='Evidence unavailable';$('alerts').textContent='Evidence API unavailable. Existing values may be old; displayed ages are no longer updating. '+e.message;
+   for(const badge of $('sources').querySelectorAll('.badge')) { badge.textContent='CONNECTION UNAVAILABLE';badge.className='badge unavailable'; }
+ }
  finally {busy=false;}
 }
 $('run').addEventListener('change',refresh); refresh(); setInterval(refresh,2000);

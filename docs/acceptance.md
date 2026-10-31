@@ -24,3 +24,15 @@ labelled fixture survived storage reconnect; SQLite integrity/foreign-key checks
 passed. These component checks do not mark any full MVP scenario above passed.
 Genuine plant/collector capture: Not run. Shared contract agreement: Pending.
 Emmanuel acceptance: Pending. Tranos source confirmation: Pending.
+
+## Integrated baseline evidence path — 31 October 2026
+
+The integration branch passed **84 tests** including real HTTP/Modbus network
+checks, publisher retry/restart, validation, traceability, narrow explained
+findings and API write refusal. A real plant process generated run
+`run-20261031T125051Z-594461` at implementation commit `bea931e`.
+The captured trace contained 15 genuine source events after collector restart
+and replay; original bytes matched the source outbox, invalid input was retained
+and POST on the evidence API was refused. See [the verification report](milestone-verification.md).
+These observations do not sign off the full scenario matrix above. Full approval/
+fault assurance, visual dashboard inspection and all human acceptance remain pending.

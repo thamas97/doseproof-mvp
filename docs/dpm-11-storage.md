@@ -2,6 +2,11 @@
 
 Owner: Thabani. Human reviewer: Emmanuel. Source confirmation: Tranos.
 
+Integration update (31 October): this document describes the original storage PR.
+The separate integration branch now captures a genuine plant/collector path; see
+[its verification report](milestone-verification.md). The original PR remains
+unmerged, and Emmanuel/Tranos acceptance is still pending.
+
 This branch implements local SQLite storage. It does not implement the plant,
 HTTP collector, full validator, rule engine, evidence API or dashboard. The
 shared envelope, register map, teaching values and saved scenarios are unchanged.
