@@ -15,3 +15,12 @@ All runtime checks are Not run. Human acceptance is pending.
 | AC-08 | Passive boundary | Not run | Pending |
 | AC-09 | Reset and repeatability | Not run | Pending |
 | AC-10 | Independent startup and presentation | Not run | Pending |
+
+## DPM-11 storage component check
+
+Implemented for review: [storage handoff and actual verification](dpm-11-storage.md).
+28 automated checks passed, including the original two starter checks. The
+labelled fixture survived storage reconnect; SQLite integrity/foreign-key checks
+passed. These component checks do not mark any full MVP scenario above passed.
+Genuine plant/collector capture: Not run. Shared contract agreement: Pending.
+Emmanuel acceptance: Pending. Tranos source confirmation: Pending.

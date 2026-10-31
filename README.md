@@ -4,7 +4,7 @@ Private three-person educational workspace for Thabani, Tranos and Emmanuel. Tar
 
 ## Current status
 
-This is a starter workspace and detailed implementation runbook. It does not yet contain a runnable treatment plant, collector, evidence API or dashboard. Runtime acceptance is **Not run**. Setup helpers and contract checks do not prove that the MVP works.
+This workspace includes the [DPM-11 SQLite storage implementation and handoff](docs/dpm-11-storage.md). It does not yet contain a runnable treatment plant, collector, evidence API or dashboard. Storage checks pass with labelled fixtures; genuine source/collector integration and human acceptance are pending. Full MVP runtime acceptance remains **Not run**.
 
 ## Start here
 
