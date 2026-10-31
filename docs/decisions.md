@@ -18,3 +18,13 @@ Payload transformation requires a reviewed extension. Existing event/register
 contracts and baseline settings are unchanged. Storage tests/fixture readback
 have executed; genuine source capture, collector integration, Tranos confirmation
 and Emmanuel acceptance remain pending.
+
+## Integrated evidence-path proposal — 31 October 2026
+
+The new integration branch assembles pending PRs #1–#3 and implements the local
+collector and read-only evidence desk. See [the integration guide](integrated-evidence-path.md).
+The unchanged source envelope is preserved. Additive GET endpoints for runs,
+original receipts and validation errors expose traceability. Five-second future
+clock tolerance and the narrow same-step sensor/model rule are proposed for team
+review; no approval or production-safety conclusion is implied. Parent tasks and
+full MVP scenario acceptance remain pending until actual evidence and human review.

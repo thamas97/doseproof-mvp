@@ -55,6 +55,10 @@ class Plant:
         run_dir = self.settings.evidence_dir / self.run_id
         self.events = EventFactory(self.run_id)
         self.publisher = Publisher(self.settings.collector_url, run_dir / "plant-source-records.jsonl")
+        # Resume older run outboxes too; their producer IDs/timestamps remain intact.
+        self.replay_publishers = [Publisher(self.settings.collector_url, path)
+                                  for path in self.settings.evidence_dir.glob('*/plant-source-records.jsonl')
+                                  if path.parent != run_dir]
         self.observer = ObserverServer(self.settings.bind_host, self.settings.observer_port)
         self.registry = CommandRegistry()
         self.controller = ControllerServer(
@@ -135,8 +139,14 @@ class Plant:
                 await asyncio.sleep(self.baseline.tick_seconds)
 
         log.info("Plant run %s starting (records: %s)", self.run_id, self.publisher.jsonl_path)
-        self.start_desk()
-        await asyncio.gather(self.observer.serve(), self.controller.serve(), loop())
+        desk_server = self.start_desk()
+        try:
+            await asyncio.gather(self.observer.serve(), self.controller.serve(), loop())
+        finally:
+            desk_server.shutdown(); desk_server.server_close()
+            self.publisher.close()
+            for publisher in self.replay_publishers:
+                publisher.close()
 
 
 def main() -> None:
