@@ -7,6 +7,10 @@ Separation of duties:
     equipment, chemical and value must all match)
 Request, approval and command are recorded as separate source events from
 'operator-desk'. Refusals are recorded in a local audit log.
+
+Lab-unapproved path (DPM-15): disabled unless MVP_LAB_MODE=1. Only the
+operator can use it, a reason is required, and it is recorded as a
+'lab_action' plus a command with approval_id = null. No approval is created.
 """
 
 from __future__ import annotations
@@ -58,18 +62,45 @@ class DoseRequest:
     history: list = field(default_factory=list)
 
 
+@dataclass
+class LabAction:
+    lab_action_id: str
+    change_id: str
+    actor_id: str
+    equipment_id: str
+    requested_feed_mg_s: float
+    reason: str
+    created_at: datetime
+    status: str = "sent"
+    command: dict | None = None
+    acknowledgement: dict | None = None
+
+
 class Desk:
     def __init__(self, emit: Callable[..., dict], execute: Callable[[str, str, float], None],
-                 audit_path: Path, clock: Callable[[], datetime] = _now) -> None:
+                 audit_path: Path, clock: Callable[[], datetime] = _now, lab_mode: bool = False) -> None:
         """emit(event_type, payload, change_id) publishes a source event.
         execute(command_id, change_id, feed) writes through the private controller path."""
         self._emit = emit
         self._execute = execute
         self._clock = clock
         self._lock = threading.RLock()
+        self.lab_mode = lab_mode
         self.requests: dict[str, DoseRequest] = {}
+        self.lab_actions: list[LabAction] = []
         self.audit_path = audit_path
         audit_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def reset(self, audit_path: Path) -> None:
+        """New run: forget open requests; earlier audit files are kept on disk."""
+        with self._lock:
+            self.requests.clear()
+            self.lab_actions.clear()
+            self.audit_path = audit_path
+            audit_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def audit_control(self, user: DeskUser, action: str, detail: str) -> None:
+        self._audit(user, action, "recorded", detail)
 
     # --- helpers -----------------------------------------------------------------
     def _audit(self, user: DeskUser, action: str, outcome: str, detail: str, request_id=None) -> None:
@@ -82,6 +113,15 @@ class Desk:
         self._audit(user, action, "refused", detail, request_id)
         raise DeskError(detail)
 
+    def _parse_feed(self, user, action, raw) -> float:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            self._refuse(user, action, "Requested feed must be a number.")
+        if not (MIN_FEED_MG_S < value <= MAX_FEED_MG_S):
+            self._refuse(user, action, f"Requested feed must be above {MIN_FEED_MG_S:g} and at most {MAX_FEED_MG_S:g} mg/s.")
+        return round(value, 2)
+
     def _get(self, user, action, request_id) -> DoseRequest:
         req = self.requests.get(request_id)
         if req is None:
@@ -93,13 +133,7 @@ class Desk:
         with self._lock:
             if user.role != "requester":
                 self._refuse(user, "request", "Only a requester can create a dose request.")
-            try:
-                value = float(requested_feed_mg_s)
-            except (TypeError, ValueError):
-                self._refuse(user, "request", "Requested feed must be a number.")
-            if not (MIN_FEED_MG_S < value <= MAX_FEED_MG_S) or value != value:
-                self._refuse(user, "request", f"Requested feed must be above {MIN_FEED_MG_S:g} and at most {MAX_FEED_MG_S:g} mg/s.")
-            value = round(value, 2)
+            value = self._parse_feed(user, "request", requested_feed_mg_s)
             req = DoseRequest(
                 request_id=f"req-{uuid.uuid4().hex[:12]}", change_id=f"chg-{uuid.uuid4().hex[:12]}",
                 actor_id=user.user_id, equipment_id=EQUIPMENT_ID, chemical=CHEMICAL, target=TARGET,
@@ -177,11 +211,46 @@ class Desk:
             raise DeskError("The controller did not accept the command. See the plant log.") from exc
         return req
 
+    # --- lab-unapproved path (DPM-15) ------------------------------------------------------
+    def lab_apply(self, user: DeskUser, requested_feed_mg_s, reason: str) -> LabAction:
+        with self._lock:
+            if not self.lab_mode:
+                self._refuse(user, "lab_apply", "Lab mode is disabled (MVP_LAB_MODE is not 1).")
+            if user.role != "operator":
+                self._refuse(user, "lab_apply", "Only the lab operator can use the lab path.")
+            reason = (reason or "").strip()
+            if len(reason) < 5:
+                self._refuse(user, "lab_apply", "A reason of at least 5 characters is required.")
+            value = self._parse_feed(user, "lab_apply", requested_feed_mg_s)
+            lab = LabAction(f"lab-{uuid.uuid4().hex[:12]}", f"chg-lab-{uuid.uuid4().hex[:12]}",
+                            user.user_id, EQUIPMENT_ID, value, reason, self._clock())
+            self._emit("lab_action", {
+                "lab_action_id": lab.lab_action_id, "actor_id": lab.actor_id,
+                "equipment_id": lab.equipment_id, "action": "apply_unapproved_feed",
+                "requested_feed_mg_s": value, "reason": reason, "approved": False,
+            }, lab.change_id)
+            lab.command = {
+                "command_id": f"cmd-{uuid.uuid4().hex[:12]}", "request_id": None, "approval_id": None,
+                "lab_action_id": lab.lab_action_id, "actor_id": user.user_id,
+                "equipment_id": lab.equipment_id, "requested_feed_mg_s": value,
+            }
+            self._emit("command", dict(lab.command), lab.change_id)
+            self.lab_actions.append(lab)
+            self._audit(user, "lab_apply", "sent", f"UNAPPROVED {value} mg/s; reason: {reason}", lab.lab_action_id)
+        try:
+            self._execute(lab.command["command_id"], lab.change_id, value)
+        except Exception as exc:
+            with self._lock:
+                lab.status = "not acknowledged"
+            self._audit(user, "lab_apply", "failed", f"controller write failed: {exc}", lab.lab_action_id)
+            raise DeskError("The controller did not accept the lab command. See the plant log.") from exc
+        return lab
+
     # --- 4. acknowledgement (called by the controller side) ---------------------------------
     def record_acknowledgement(self, command_id: str, ack: dict) -> None:
         with self._lock:
-            for req in self.requests.values():
-                if req.command and req.command["command_id"] == command_id:
-                    req.acknowledgement = ack
-                    req.status = "acknowledged" if ack["accepted"] else "rejected by controller"
+            for item in list(self.requests.values()) + self.lab_actions:
+                if item.command and item.command["command_id"] == command_id:
+                    item.acknowledgement = ack
+                    item.status = "acknowledged" if ack["accepted"] else "rejected by controller"
                     return

@@ -64,6 +64,7 @@ class ServiceSettings:
     desk_port: int
     collector_url: str
     evidence_dir: Path
+    lab_mode: bool = False  # MVP_LAB_MODE=1 allows the labelled lab-unapproved path
 
 
 def load_service_settings() -> ServiceSettings:
@@ -76,4 +77,5 @@ def load_service_settings() -> ServiceSettings:
         desk_port=int(os.environ.get("MVP_DESK_PORT", "5000")),
         collector_url=f"http://{host}:{collector_port}/intake/events",
         evidence_dir=ROOT / "evidence",
+        lab_mode=os.environ.get("MVP_LAB_MODE", "0").strip() == "1",
     )

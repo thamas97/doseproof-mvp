@@ -47,34 +47,69 @@ class Plant:
     def __init__(self, run_id: str | None = None, settings=None) -> None:
         self.baseline = load_baseline()
         self.settings = settings or load_service_settings()
+        self._lock = threading.RLock()  # plant tick, controller acceptance and reset
+        self.paused = False
+        self.observer = ObserverServer(self.settings.bind_host, self.settings.observer_port)
+        self.registry = CommandRegistry()
+        self.controller = ControllerServer(
+            self.settings.bind_host, self.settings.controller_port, self.registry, self._controller_accept)
+        self._start_run(run_id)
+        self.desk = Desk(self._desk_emit, self._send_command, self._run_dir / "desk-audit.jsonl",
+                         lab_mode=self.settings.lab_mode)
+
+    def _start_run(self, run_id: str | None) -> None:
+        """Fresh baseline: new run ID, model, seeds, queues and record file."""
         self.run_id = run_id or new_run_id()
         self.model = PlantModel(self.baseline)
         self.sensor_a = SensorAdapter(self.baseline.sensor_a)
         self.sensor_b = SensorAdapter(self.baseline.sensor_b)
         self.ack_counter = 0
-        run_dir = self.settings.evidence_dir / self.run_id
+        self.registry.clear()
+        self._run_dir = self.settings.evidence_dir / self.run_id
         self.events = EventFactory(self.run_id)
-        self.publisher = Publisher(self.settings.collector_url, run_dir / "plant-source-records.jsonl")
-        self.observer = ObserverServer(self.settings.bind_host, self.settings.observer_port)
-        self.registry = CommandRegistry()
-        self.controller = ControllerServer(
-            self.settings.bind_host, self.settings.controller_port, self.registry, self._controller_accept)
-        self.desk = Desk(self._desk_emit, self._send_command, run_dir / "desk-audit.jsonl")
+        self.publisher = Publisher(self.settings.collector_url, self._run_dir / "plant-source-records.jsonl")
+        self._refresh_observer()
+
+    # --- lab controls (operator only, via the desk) ----------------------------------------
+    def reset(self, paused: bool = True) -> str:
+        """New run at step 0. Earlier evidence folders are kept. Starts paused by default
+        so an approved command can be applied before step 1."""
+        with self._lock:
+            self.paused = paused
+            self._start_run(None)
+        self.desk.reset(self._run_dir / "desk-audit.jsonl")
+        log.info("RESET: new run %s at step 0 (%s)", self.run_id, "paused" if paused else "running")
+        return self.run_id
+
+    def pause(self) -> None:
+        self.paused = True
+        log.info("PAUSED at step %d", self.model.sim_step)
+
+    def resume(self) -> None:
+        self.paused = False
+        log.info("RESUMED at step %d", self.model.sim_step)
 
     # --- plant tick ------------------------------------------------------------------------
-    def tick(self) -> list[int]:
-        state = self.model.step()
-        a = self.sensor_a.sample(state.modeled_residual_mg_l, state.sim_step)
-        b = self.sensor_b.sample(state.modeled_residual_mg_l, state.sim_step)
+    def _refresh_observer(self) -> list[int]:
+        state = self.model.state()
+        a, b = self.sensor_a.last_sample, self.sensor_b.last_sample
         snapshot = build_snapshot(
-            state, a, b, a.quality, b.quality,
+            state, a, b, "good" if a else "unavailable", "good" if b else "unavailable",
             self.sensor_a.age_steps(state.sim_step), self.sensor_b.age_steps(state.sim_step),
             self.ack_counter,
         )
         self.observer.update(snapshot)
-        for event in (plant_feedback(self.events, state), sensor_observation(self.events, a),
-                      sensor_observation(self.events, b)):
-            self.publisher.publish(event)
+        return snapshot
+
+    def tick(self) -> list[int]:
+        with self._lock:
+            state = self.model.step()
+            a = self.sensor_a.sample(state.modeled_residual_mg_l, state.sim_step)
+            b = self.sensor_b.sample(state.modeled_residual_mg_l, state.sim_step)
+            snapshot = self._refresh_observer()
+            for event in (plant_feedback(self.events, state), sensor_observation(self.events, a),
+                          sensor_observation(self.events, b)):
+                self.publisher.publish(event)
         log.info(
             "step %d  flow %.2f L/s  accepted %.2f mg/s  delivery %.2f mg/s  residual %.4f  A %.3f  B %.3f",
             state.sim_step, state.flow_l_s, state.accepted_feed_mg_s, state.actual_delivery_mg_s,
@@ -103,9 +138,11 @@ class Plant:
 
     def _controller_accept(self, cmd: PendingCommand) -> None:
         """Runs in the plant loop when the controller accepts an authorised write."""
-        self.model.set_requested_feed(cmd.requested_feed_mg_s)
-        self.model.set_accepted_feed(cmd.requested_feed_mg_s)
-        self.ack_counter += 1
+        with self._lock:
+            self.model.set_requested_feed(cmd.requested_feed_mg_s)
+            self.model.set_accepted_feed(cmd.requested_feed_mg_s)
+            self.ack_counter += 1
+            self._refresh_observer()  # setting and ack visible now; delivery effect follows the model
         ack = {
             "command_id": cmd.command_id,
             "accepted": True,
@@ -119,7 +156,7 @@ class Plant:
 
     # --- run -------------------------------------------------------------------------------
     def start_desk(self):
-        app = create_desk_app(self.desk, self.model.state)
+        app = create_desk_app(self.desk, lambda: self.model.state(), controls=self)
         server = make_server(self.settings.bind_host, self.settings.desk_port, app, threaded=True)
         threading.Thread(target=server.serve_forever, name="operator-desk", daemon=True).start()
         log.info("Operator desk on http://%s:%d", self.settings.bind_host, self.settings.desk_port)
@@ -129,12 +166,15 @@ class Plant:
         async def loop() -> None:
             while True:
                 try:
-                    self.tick()
+                    if not self.paused:
+                        self.tick()
                 except Exception:  # keep the plant alive; record the error
                     log.exception("tick failed")
                 await asyncio.sleep(self.baseline.tick_seconds)
 
         log.info("Plant run %s starting (records: %s)", self.run_id, self.publisher.jsonl_path)
+        if self.settings.lab_mode:
+            log.warning("LAB MODE ENABLED: the labelled lab-unapproved path is available to the operator")
         self.start_desk()
         await asyncio.gather(self.observer.serve(), self.controller.serve(), loop())
 

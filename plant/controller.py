@@ -56,6 +56,10 @@ class CommandRegistry:
             self._pending[seq] = cmd
             return cmd
 
+    def clear(self) -> None:
+        with self._lock:
+            self._pending.clear()
+
     def take(self, seq: int, raw_feed: int) -> PendingCommand | None:
         """Remove and return the pending command only if seq and value match."""
         with self._lock:

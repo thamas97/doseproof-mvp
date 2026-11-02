@@ -41,11 +41,29 @@ LOGIN = """<h2>Operator desk sign-in</h2>
 <p><label>Password <input type="password" name="password" autocomplete="current-password"></label></p>
 <button>Sign in</button></form>"""
 
-HOME = """<h3>Plant now (step {{ s.sim_step }})</h3>
+HOME = """<h3>Plant now (step {{ s.sim_step }}){% if c %} &middot; run <code>{{ c.run_id }}</code> &middot; <b>{{ 'PAUSED' if c.paused else 'running' }}</b>{% endif %}</h3>
 <table><tr><th>Flow L/s</th><th>Requested feed mg/s</th><th>Accepted feed mg/s</th><th>Actual delivery mg/s</th><th>Pump</th><th>Modeled residual mg/L</th></tr>
 <tr><td>{{ '%.2f'|format(s.flow_l_s) }}</td><td>{{ '%.2f'|format(s.requested_feed_mg_s) }}</td><td>{{ '%.2f'|format(s.accepted_feed_mg_s) }}</td>
 <td>{{ '%.2f'|format(s.actual_delivery_mg_s) }}</td><td>{{ 'running' if s.pump_running else 'stopped' }}</td><td>{{ '%.4f'|format(s.modeled_residual_mg_l) }}</td></tr></table>
 <p class="muted">Accepted feed is the controller setting; actual delivery is what the pump delivers; the residual responds after a delay.</p>
+{% if c and user.role == 'operator' %}
+<h3>Lab controls (operator)</h3>
+<form class="inline" method="post" action="{{ url_for('control', action='reset') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Reset to new run (paused at step 0)</button></form>
+{% if c.paused %}<form class="inline" method="post" action="{{ url_for('control', action='resume') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Resume</button></form>
+{% else %}<form class="inline" method="post" action="{{ url_for('control', action='pause') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Pause</button></form>{% endif %}
+<p class="muted">Reset keeps earlier evidence folders. Pause stops simulation steps; real time continues.</p>
+{% if desk.lab_mode %}
+<div style="border:2px solid #c0392b;padding:8px 12px;margin:10px 0;background:#fdecea">
+<b>LAB MODE: UNAPPROVED CHANGE</b>. Recorded as a lab_action by {{ user.display_name }} with <b>no approval</b>.
+<form method="post" action="{{ url_for('lab_apply') }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+ Feed <input name="requested_feed_mg_s" size="6" value="20"> mg/s, reason <input name="reason" size="40" placeholder="why this unapproved lab change is made">
+ <button>Apply UNAPPROVED lab change</button></form></div>
+{% else %}<p class="muted">Lab-unapproved path is disabled (start with MVP_LAB_MODE=1 to enable).</p>{% endif %}
+{% endif %}
+{% if desk.lab_actions %}<h3>Lab-unapproved actions</h3>
+<table><tr><th>Lab action</th><th>Actor</th><th>Feed mg/s</th><th>Reason</th><th>Status</th><th>Command / acknowledgement</th></tr>
+{% for l in desk.lab_actions %}<tr style="background:#fdecea"><td>{{ l.lab_action_id }}<br><span class="muted">{{ l.change_id }}</span></td><td>{{ l.actor_id }}</td><td>{{ l.requested_feed_mg_s }}</td><td>{{ l.reason }}</td><td><b>{{ l.status }}</b> (no approval)</td>
+<td>{{ l.command.command_id }}{% if l.acknowledgement %}<br>ack: accepted={{ l.acknowledgement.accepted }}{% endif %}</td></tr>{% endfor %}</table>{% endif %}
 {% if user.role == 'requester' %}
 <h3>New dose request</h3>
 <form method="post" action="{{ url_for('create_request') }}"><input type="hidden" name="csrf" value="{{ csrf }}">
@@ -67,7 +85,8 @@ HOME = """<h3>Plant now (step {{ s.sim_step }})</h3>
 </table>"""
 
 
-def create_desk_app(desk: Desk, plant_state: Callable[[], object]) -> Flask:
+def create_desk_app(desk: Desk, plant_state: Callable[[], object], controls=None) -> Flask:
+    """controls (optional): object with run_id, paused, reset(), pause(), resume()."""
     app = Flask(__name__)
     app.config.update(
         SECRET_KEY=secrets.token_hex(32),  # new random key every start; never stored
@@ -97,7 +116,7 @@ def create_desk_app(desk: Desk, plant_state: Callable[[], object]) -> Flask:
 
     def home_page(message=None, error=False):
         reqs = sorted(desk.requests.values(), key=lambda r: r.created_at, reverse=True)
-        return render(HOME, message, error, s=plant_state(), reqs=reqs)
+        return render(HOME, message, error, s=plant_state(), reqs=reqs, c=controls, desk=desk)
 
     @app.route("/", methods=["GET"])
     def index():
@@ -144,5 +163,27 @@ def create_desk_app(desk: Desk, plant_state: Callable[[], object]) -> Flask:
     @app.route("/requests/<request_id>/execute", methods=["POST"])
     def execute(request_id):
         return act(lambda u: f"Command sent; status: {desk.execute(u, request_id).status}.")
+
+    @app.route("/lab", methods=["POST"])
+    def lab_apply():
+        return act(lambda u: f"Lab action {desk.lab_apply(u, request.form.get('requested_feed_mg_s'), request.form.get('reason')).lab_action_id} sent (UNAPPROVED).")
+
+    @app.route("/control/<action>", methods=["POST"])
+    def control(action):
+        def run(user):
+            if controls is None or action not in ("reset", "pause", "resume"):
+                raise DeskError("Unknown control.")
+            if user.role != "operator":
+                desk._audit(user, action, "refused", "Only the lab operator can use lab controls.")
+                raise DeskError("Only the lab operator can use lab controls.")
+            if action == "reset":
+                old = controls.run_id
+                new = controls.reset()
+                desk.audit_control(user, "reset", f"new run {new} at step 0, paused (previous run {old} kept)")
+                return f"Reset: new run {new}, paused at step 0."
+            getattr(controls, action)()
+            desk.audit_control(user, action, f"at step {plant_state().sim_step}")
+            return f"{action.capitalize()}d at step {plant_state().sim_step}."
+        return act(run)
 
     return app
