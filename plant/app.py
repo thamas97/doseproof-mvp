@@ -92,10 +92,11 @@ class Plant:
         self.publisher.publish(event)
         return event
 
-    def _send_command(self, command_id: str, change_id: str, feed_mg_s: float) -> None:
+    def _send_command(self, command_id: str, change_id: str, feed_mg_s: float,
+                      expires_at: datetime) -> None:
         """Desk -> private controller over Modbus (FC16: [sequence, feed x100])."""
-        cmd = self.registry.register(command_id, change_id, feed_mg_s)
         client = ModbusTcpClient(self.settings.bind_host, port=self.settings.controller_port, timeout=3)
+        cmd = self.registry.register(command_id, change_id, feed_mg_s, expires_at)
         try:
             if not client.connect():
                 raise ConnectionError("private controller not reachable")
@@ -103,6 +104,7 @@ class Plant:
             if result.isError():
                 raise RuntimeError(f"controller refused: {result}")
         finally:
+            self.registry.revoke(cmd)
             client.close()
 
     def _controller_accept(self, cmd: PendingCommand) -> None:

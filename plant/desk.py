@@ -59,10 +59,10 @@ class DoseRequest:
 
 
 class Desk:
-    def __init__(self, emit: Callable[..., dict], execute: Callable[[str, str, float], None],
+    def __init__(self, emit: Callable[..., dict], execute: Callable[[str, str, float, datetime], None],
                  audit_path: Path, clock: Callable[[], datetime] = _now) -> None:
         """emit(event_type, payload, change_id) publishes a source event.
-        execute(command_id, change_id, feed) writes through the private controller path."""
+        execute(command_id, change_id, feed, expires_at) writes through the private controller path."""
         self._emit = emit
         self._execute = execute
         self._clock = clock
@@ -97,9 +97,10 @@ class Desk:
                 value = float(requested_feed_mg_s)
             except (TypeError, ValueError):
                 self._refuse(user, "request", "Requested feed must be a number.")
-            if not (MIN_FEED_MG_S < value <= MAX_FEED_MG_S) or value != value:
-                self._refuse(user, "request", f"Requested feed must be above {MIN_FEED_MG_S:g} and at most {MAX_FEED_MG_S:g} mg/s.")
-            value = round(value, 2)
+            rounded_feed = round(value, 2)
+            if not (MIN_FEED_MG_S < value <= MAX_FEED_MG_S) or rounded_feed <= MIN_FEED_MG_S:
+                self._refuse(user, "request", f"Requested feed must be positive at 0.01 mg/s resolution and at most {MAX_FEED_MG_S:g} mg/s.")
+            value = rounded_feed
             req = DoseRequest(
                 request_id=f"req-{uuid.uuid4().hex[:12]}", change_id=f"chg-{uuid.uuid4().hex[:12]}",
                 actor_id=user.user_id, equipment_id=EQUIPMENT_ID, chemical=CHEMICAL, target=TARGET,
@@ -124,15 +125,16 @@ class Desk:
             if req.status != "requested":
                 self._refuse(user, "approve", f"Request is already {req.status}.", request_id)
             expires = self._clock() + timedelta(minutes=APPROVAL_VALID_MINUTES)
-            req.approval = {
+            approval = {
                 "approval_id": f"apr-{uuid.uuid4().hex[:12]}", "request_id": req.request_id,
                 "approver_id": user.user_id, "equipment_id": req.equipment_id, "chemical": req.chemical,
                 "target": req.target, "approved_feed_mg_s": req.requested_feed_mg_s,
                 "expires_at_utc": _iso(expires),
             }
+            self._emit("dose_approval", dict(approval), req.change_id)
+            req.approval = approval
             req.status = "approved"
-            self._emit("dose_approval", dict(req.approval), req.change_id)
-            self._audit(user, "approve", "recorded", f"valid until {req.approval['expires_at_utc']}", request_id)
+            self._audit(user, "approve", "recorded", f"valid until {approval['expires_at_utc']}", request_id)
             return req
 
     # --- 3. execute ----------------------------------------------------------------------
@@ -156,7 +158,7 @@ class Desk:
             if failed:
                 self._refuse(user, "execute", "Approval does not match: " + ", ".join(failed) + ".", request_id)
             expires = datetime.fromisoformat(a["expires_at_utc"].replace("Z", "+00:00"))
-            if self._clock() > expires:
+            if self._clock() >= expires:
                 req.status = "expired"
                 self._refuse(user, "execute", "Approval has expired; request a new approval.", request_id)
             req.command = {
@@ -169,7 +171,7 @@ class Desk:
             self._audit(user, "execute", "sent", f"{req.requested_feed_mg_s} mg/s", request_id)
         # write outside the lock: the controller's acknowledgement calls back into the desk
         try:
-            self._execute(req.command["command_id"], req.change_id, req.requested_feed_mg_s)
+            self._execute(req.command["command_id"], req.change_id, req.requested_feed_mg_s, expires)
         except Exception as exc:  # controller refused or unreachable
             with self._lock:
                 req.status = "not acknowledged"

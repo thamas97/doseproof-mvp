@@ -6,9 +6,9 @@ operator desk. It is not part of the DoseProof observer configuration.
 Command write: one FC16 write of 2 registers at address 0:
   register 0 = command sequence number (assigned by the desk)
   register 1 = requested feed x100 (mg/s)
-The controller accepts a write only when it matches a command the desk has
-registered (same sequence and value) and the value is within the teaching
-limits. Anything else is refused with a Modbus exception and no change.
+The controller accepts a write only when it matches an unexpired command the
+desk has registered (same sequence and value) and the value is within the
+teaching limits. Anything else is refused with a Modbus exception and no change.
 
 On acceptance the controller sets the accepted feed and emits an
 acknowledgement. The acknowledgement says the controller accepted the
@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable
 
 from pymodbus.constants import ExcCodes
@@ -38,6 +39,7 @@ class PendingCommand:
     command_id: str
     change_id: str
     requested_feed_mg_s: float
+    expires_at: datetime
 
 
 class CommandRegistry:
@@ -48,19 +50,31 @@ class CommandRegistry:
         self._pending: dict[int, PendingCommand] = {}
         self._next_seq = 1
 
-    def register(self, command_id: str, change_id: str, feed_mg_s: float) -> PendingCommand:
+    def register(self, command_id: str, change_id: str, feed_mg_s: float,
+                 expires_at: datetime) -> PendingCommand:
         with self._lock:
             seq = self._next_seq
             self._next_seq = self._next_seq % 65535 + 1
-            cmd = PendingCommand(seq, command_id, change_id, feed_mg_s)
+            cmd = PendingCommand(seq, command_id, change_id, feed_mg_s, expires_at)
             self._pending[seq] = cmd
             return cmd
 
+    def revoke(self, cmd: PendingCommand) -> None:
+        """Withdraw this registration if the controller has not consumed it."""
+        with self._lock:
+            if self._pending.get(cmd.seq) is cmd:
+                del self._pending[cmd.seq]
+
     def take(self, seq: int, raw_feed: int) -> PendingCommand | None:
-        """Remove and return the pending command only if seq and value match."""
+        """Consume a matching command once, within its approval window."""
         with self._lock:
             cmd = self._pending.get(seq)
-            if cmd is None or round(cmd.requested_feed_mg_s * 100) != raw_feed:
+            if cmd is None:
+                return None
+            if datetime.now(timezone.utc) >= cmd.expires_at:
+                del self._pending[seq]
+                return None
+            if round(cmd.requested_feed_mg_s * 100) != raw_feed:
                 return None
             return self._pending.pop(seq)
 
@@ -92,7 +106,7 @@ class ControllerServer:
     def _refuse(self, reason: str):
         self.refused += 1
         log.warning("Controller refused write: %s", reason)
-        return ExcCodes.ILLEGAL_DATA_VALUE
+        return ExcCodes.ILLEGAL_VALUE
 
     async def serve(self) -> None:
         device = SimDevice(
