@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 import threading
 import uuid
@@ -29,7 +30,7 @@ from werkzeug.serving import make_server
 
 from plant.config import load_baseline, load_service_settings
 from plant.controller import CommandRegistry, ControllerServer, PendingCommand
-from plant.desk import Desk
+from plant.desk import Desk, DeskError
 from plant.desk_web import create_desk_app
 from plant.events import EventFactory, Publisher, plant_feedback, sensor_observation
 from plant.model import PlantModel
@@ -52,6 +53,7 @@ class Plant:
         self.sensor_a = SensorAdapter(self.baseline.sensor_a)
         self.sensor_b = SensorAdapter(self.baseline.sensor_b)
         self.ack_counter = 0
+        self.paused = False
         run_dir = self.settings.evidence_dir / self.run_id
         self.events = EventFactory(self.run_id)
         self.publisher = Publisher(self.settings.collector_url, run_dir / "plant-source-records.jsonl")
@@ -63,7 +65,8 @@ class Plant:
         self.registry = CommandRegistry()
         self.controller = ControllerServer(
             self.settings.bind_host, self.settings.controller_port, self.registry, self._controller_accept)
-        self.desk = Desk(self._desk_emit, self._send_command, run_dir / "desk-audit.jsonl")
+        lab_mode = self.settings.bind_host == '127.0.0.1' and os.environ.get('MVP_LAB_MODE') == '1'
+        self.desk = Desk(self._desk_emit, self._send_command, run_dir / "desk-audit.jsonl", lab_mode=lab_mode)
 
     # --- plant tick ------------------------------------------------------------------------
     def tick(self) -> list[int]:
@@ -92,10 +95,11 @@ class Plant:
         self.publisher.publish(event)
         return event
 
-    def _send_command(self, command_id: str, change_id: str, feed_mg_s: float) -> None:
+    def _send_command(self, command_id: str, change_id: str, feed_mg_s: float,
+                      expires_at: datetime) -> None:
         """Desk -> private controller over Modbus (FC16: [sequence, feed x100])."""
-        cmd = self.registry.register(command_id, change_id, feed_mg_s)
         client = ModbusTcpClient(self.settings.bind_host, port=self.settings.controller_port, timeout=3)
+        cmd = self.registry.register(command_id, change_id, feed_mg_s, expires_at)
         try:
             if not client.connect():
                 raise ConnectionError("private controller not reachable")
@@ -103,6 +107,7 @@ class Plant:
             if result.isError():
                 raise RuntimeError(f"controller refused: {result}")
         finally:
+            self.registry.revoke(cmd)
             client.close()
 
     def _controller_accept(self, cmd: PendingCommand) -> None:
@@ -121,9 +126,54 @@ class Plant:
         self.desk.record_acknowledgement(cmd.command_id, ack)
         log.info("controller accepted %s: accepted feed now %.2f mg/s", cmd.command_id, cmd.requested_feed_mg_s)
 
+    def _control_run(self, user, action, expected_run):
+        """Called on the plant loop, between ticks and controller writes."""
+        with self.desk._lock:
+            if user.role != 'operator':
+                self.desk._refuse(user, action, 'Only the operator can control the simulation run.')
+            if expected_run != self.run_id:
+                self.desk._refuse(user, action, 'The run changed. Reload the desk and try again.')
+            if action == 'reset':
+                if self.desk._in_flight:
+                    self.desk._refuse(user, action, 'Wait for the current command to finish before resetting.')
+                run_id = new_run_id()
+                run_dir = self.settings.evidence_dir / run_id
+                publisher = Publisher(self.settings.collector_url, run_dir / 'plant-source-records.jsonl')
+                self.replay_publishers.append(self.publisher)
+                self.run_id, self.events, self.publisher = run_id, EventFactory(run_id), publisher
+                self.model.reset()
+                self.sensor_a.reset()
+                self.sensor_b.reset()
+                self.ack_counter = 0
+                self.observer.clear()
+                self.desk.requests.clear()
+                self.desk.audit_path = run_dir / 'desk-audit.jsonl'
+                self.paused = True
+            elif action in ('pause', 'resume'):
+                self.paused = action == 'pause'
+            else:
+                self.desk._refuse(user, action, 'Unknown simulation control.')
+            state = 'paused' if self.paused else 'running'
+            self.desk._audit(user, action, 'recorded', f'{self.run_id} is {state}')
+            return f'{self.run_id} is {state}.'
+
     # --- run -------------------------------------------------------------------------------
     def start_desk(self):
-        app = create_desk_app(self.desk, self.model.state)
+        loop = asyncio.get_running_loop()
+
+        async def control_on_loop(user, action, expected_run):
+            return self._control_run(user, action, expected_run)
+
+        def control(user, action, expected_run):
+            future = asyncio.run_coroutine_threadsafe(control_on_loop(user, action, expected_run), loop)
+            try:
+                return future.result(timeout=5)
+            except TimeoutError as exc:
+                future.cancel()
+                raise DeskError('Simulation control outcome could not be confirmed. Reload the desk.') from exc
+
+        app = create_desk_app(self.desk, self.model.state, control=control,
+                              run_state=lambda: (self.run_id, self.paused))
         server = make_server(self.settings.bind_host, self.settings.desk_port, app, threaded=True)
         threading.Thread(target=server.serve_forever, name="operator-desk", daemon=True).start()
         log.info("Operator desk on http://%s:%d", self.settings.bind_host, self.settings.desk_port)
@@ -133,7 +183,8 @@ class Plant:
         async def loop() -> None:
             while True:
                 try:
-                    self.tick()
+                    if not self.paused:
+                        self.tick()
                 except Exception:  # keep the plant alive; record the error
                     log.exception("tick failed")
                 await asyncio.sleep(self.baseline.tick_seconds)

@@ -54,9 +54,12 @@ class ObserverServer:
     def __init__(self, host: str, port: int) -> None:
         self.host = host
         self.port = port
-        self.snapshot = [0] * REGISTER_COUNT
+        self.clear()
         self.refused_writes = 0
         self.server: ModbusTcpServer | None = None  # created in serve(): pymodbus needs a running loop
+
+    def clear(self) -> None:
+        self.snapshot = [0] * 8 + [QUALITY_CODES['unavailable']] * 2 + [65535, 65535, 0]
 
     async def _on_request(self, func_code, start, address, count, current, set_values):
         if set_values is not None:  # any write request from the network

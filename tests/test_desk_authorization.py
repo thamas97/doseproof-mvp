@@ -4,15 +4,18 @@ import asyncio
 import json
 import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 from pymodbus.client import ModbusTcpClient
+from pymodbus.constants import ExcCodes
 
 from plant.app import Plant
 from plant.config import ServiceSettings
+from plant.controller import CommandRegistry, ControllerServer
 from plant.desk import Desk, DeskError, _now
 from plant.desk_users import USERS, authenticate, set_password
 from plant.desk_web import create_desk_app
@@ -63,7 +66,7 @@ def test_roles_are_enforced(desk):
     assert desk.sent == []
 
 
-@pytest.mark.parametrize("bad", ["abc", "0", "-5", "41", "nan", "inf"])
+@pytest.mark.parametrize("bad", ["abc", "0", "0.001", "-5", "41", "nan", "inf"])
 def test_invalid_values_are_refused(desk, bad):
     with pytest.raises(DeskError):
         desk.create_request(EMMANUEL, bad)
@@ -82,6 +85,31 @@ def test_execution_requires_matching_unexpired_approval(desk):
     assert desk.sent == []
 
 
+def test_failed_approval_record_does_not_authorize_execution(desk, monkeypatch):
+    req = desk.create_request(EMMANUEL, 20)
+    emit = desk._emit
+
+    def fail_approval_record(event_type, payload, change_id):
+        if event_type == "dose_approval":
+            raise OSError("approval record could not be saved")
+        return emit(event_type, payload, change_id)
+
+    monkeypatch.setattr(desk, "_emit", fail_approval_record)
+    with pytest.raises(OSError, match="approval record"):
+        desk.approve(THABANI, req.request_id)
+    with pytest.raises(DeskError, match="approval is required"):
+        desk.execute(TRANOS, req.request_id)
+    assert req.status == "requested" and req.approval is None
+    assert [event[0] for event in desk.events] == ["dose_request"]
+    assert desk.sent == []
+
+    monkeypatch.setattr(desk, "_emit", emit)
+    desk.approve(THABANI, req.request_id)
+    desk.execute(TRANOS, req.request_id)
+    assert [event[0] for event in desk.events] == ["dose_request", "dose_approval", "command"]
+    assert len(desk.sent) == 1
+
+
 def test_records_are_separate_and_share_change_id(desk):
     req = desk.create_request(EMMANUEL, 20)
     desk.approve(THABANI, req.request_id)
@@ -89,7 +117,8 @@ def test_records_are_separate_and_share_change_id(desk):
     assert [e[0] for e in desk.events] == ["dose_request", "dose_approval", "command"]
     assert {e[2] for e in desk.events} == {req.change_id}
     assert desk.events[2][1]["approval_id"] == req.approval["approval_id"]
-    assert desk.sent == [(req.command["command_id"], req.change_id, 20.0)]
+    expires_at = datetime.fromisoformat(req.approval["expires_at_utc"])
+    assert desk.sent == [(req.command["command_id"], req.change_id, 20.0, expires_at)]
 
 
 # --- passwords -----------------------------------------------------------------------------
@@ -125,6 +154,38 @@ def test_web_login_and_csrf(tmp_path, monkeypatch):
 
 
 # --- full path over the private Modbus controller --------------------------------------------
+@pytest.mark.parametrize("failed_connection", [True, False], ids=["offline", "write-timeout"])
+def test_failed_send_revokes_pending_command(tmp_path, monkeypatch, failed_connection):
+    settings = ServiceSettings("127.0.0.1", 0, 0, 0, "http://127.0.0.1:9/none", tmp_path)
+    plant = Plant(run_id="test-run", settings=settings)
+    client = Mock()
+    client.connect.return_value = not failed_connection
+    client.write_registers.side_effect = TimeoutError("no Modbus response")
+    monkeypatch.setattr("plant.app.ModbusTcpClient", Mock(return_value=client))
+    req = plant.desk.create_request(EMMANUEL, 20)
+    plant.desk.approve(THABANI, req.request_id)
+
+    with pytest.raises(DeskError):
+        plant.desk.execute(TRANOS, req.request_id)
+    result = asyncio.run(plant.controller._on_request(16, 0, 0, 2, None, [1, 2000]))
+
+    assert result == ExcCodes.ILLEGAL_VALUE
+    assert plant.model.accepted_feed_mg_s == 15.0
+    assert req.status == "not acknowledged" and req.acknowledgement is None
+
+
+def test_controller_refuses_expired_pending_command():
+    accepted = []
+    registry = CommandRegistry()
+    controller = ControllerServer("127.0.0.1", 0, registry, accepted.append)
+    pending = registry.register("cmd-expired", "chg-expired", 20, _now() - timedelta(seconds=1))
+
+    result = asyncio.run(controller._on_request(16, 0, 0, 2, None, [pending.seq, 2000]))
+
+    assert result == ExcCodes.ILLEGAL_VALUE and accepted == []
+    assert registry.take(pending.seq, 2000) is None
+
+
 def test_approved_change_runs_through_private_controller(tmp_path):
     settings = ServiceSettings("127.0.0.1", 15022, 15023, 15024, "http://127.0.0.1:9/none", tmp_path)
     plant = Plant(run_id="test-run", settings=settings)
@@ -149,8 +210,8 @@ def test_approved_change_runs_through_private_controller(tmp_path):
         # a rogue write (not registered by the desk) is refused and changes nothing
         rogue = ModbusTcpClient("127.0.0.1", port=15023)
         rogue.connect()
-        assert rogue.write_registers(0, [999, 3000], device_id=1).isError()
-        assert rogue.write_register(1, 3000, device_id=1).isError()
+        assert rogue.write_registers(0, [999, 3000], device_id=1).exception_code == ExcCodes.ILLEGAL_VALUE
+        assert rogue.write_register(1, 3000, device_id=1).exception_code == ExcCodes.ILLEGAL_VALUE
         rogue.close()
         assert plant.model.accepted_feed_mg_s == 20.0
 

@@ -12,7 +12,7 @@ if __package__ in (None, ''):
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
-from monitor.processing import process_snapshot
+from monitor.processing import process_snapshot, recheck_conflicts
 from monitor.storage import EvidenceStore
 from monitor.validation import InvalidEvent, validate_event
 
@@ -28,8 +28,8 @@ def create_app(path=None):
     app.config['DATABASE'] = Path(path or database_path()).resolve()
     app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
     app.extensions['write_lock'] = threading.Lock()
-    with EvidenceStore(app.config['DATABASE']):
-        pass
+    with EvidenceStore(app.config['DATABASE']) as store:
+        recheck_conflicts(store)
 
     @app.post('/intake/events')
     def intake():
@@ -48,7 +48,7 @@ def create_app(path=None):
                     return jsonify(receipt_id=receipt.receipt_id, processing='rejected', error_id=error_id, reason=str(exc)), 422
                 outcome = store.write_normalized(receipt.receipt_id, event)
                 if outcome.outcome == 'conflict':
-                    process_snapshot(store, event)
+                    recheck_conflicts(store, receipt.receipt_id)
                     return jsonify(receipt_id=receipt.receipt_id, processing='conflict', error_id=outcome.error_id), 409
                 # Also retries may finish derived processing after an earlier failure.
                 process_snapshot(store, event)

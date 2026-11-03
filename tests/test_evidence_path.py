@@ -68,7 +68,7 @@ def test_actual_generated_events_are_traceable_through_all_stages(clients, path)
     assert api_app(path).test_client().get('/api/events').json == api.get('/api/events').json
 
 
-@pytest.mark.parametrize('fault', ['unit', 'source', 'quality', 'negative', 'missing_field', 'non_utc', 'future', 'time_order', 'nan', 'duplicate_key', 'binary'])
+@pytest.mark.parametrize('fault', ['unit', 'source', 'quality', 'negative', 'oversized_integer', 'invalid_unicode', 'missing_field', 'non_utc', 'future', 'time_order', 'nan', 'duplicate_key', 'binary'])
 def test_invalid_original_is_retained_without_normalization(clients, path, fault):
     collector, api = clients
     event = generated()[1]
@@ -76,6 +76,8 @@ def test_invalid_original_is_retained_without_normalization(clients, path, fault
     if fault == 'source': event['source_id'] = 'controller'
     if fault == 'quality': event['payload']['quality'] = 'invented'
     if fault == 'negative': event['payload']['value'] = -1
+    if fault == 'oversized_integer': event['payload']['value'] = 10 ** 400
+    if fault == 'invalid_unicode': event['payload']['equipment_id'] = '\ud800'
     if fault == 'missing_field': del event['payload']['value']
     if fault == 'non_utc': event['source_timestamp_utc'] = '2026-10-31T10:00:00+02:00'
     if fault == 'future': event['emitted_at_utc'] = (datetime.now(timezone.utc)+timedelta(days=1)).isoformat()
@@ -105,14 +107,35 @@ def test_duplicate_and_conflicting_identity_keep_receipts(clients):
     assert api.get('/api/errors').json['items'][0]['code'] == 'event_identity_conflict'
 
 
-def test_later_conflict_invalidates_supported_result_and_replay_cannot_hide_it(clients):
+@pytest.mark.parametrize('step_shift', [0, 1])
+def test_later_conflict_invalidates_supported_result_and_replay_cannot_hide_it(clients, step_shift):
     collector,api=clients
     events=generated()
     for event in events:post(collector,event)
     assert api.get('/api/findings').json['items'][0]['status']=='PASS'
     changed=json.loads(json.dumps(events[1]));changed['payload']['value']+=0.4
+    changed['sim_step'] += step_shift
     assert post(collector,changed).status_code==409
     assert api.get('/api/findings').json['items'][0]['status']=='UNVERIFIED'
+    post(collector,events[1])
+    assert api.get('/api/findings').json['items'][0]['status']=='UNVERIFIED'
+
+
+def test_startup_rechecks_a_conflict_retained_by_an_older_collector(clients, path):
+    collector, api = clients
+    events = generated()
+    for event in events:
+        post(collector, event)
+    changed = json.loads(json.dumps(events[1]))
+    changed['sim_step'] += 1
+    with EvidenceStore(path) as store:
+        receipt = store.write_raw(json.dumps(changed).encode(), content_type='application/json')
+        assert store.write_normalized(receipt.receipt_id, changed).outcome == 'conflict'
+    assert api.get('/api/findings').json['items'][0]['status'] == 'PASS'
+    collector_app(path)
+    finding = api.get('/api/findings').json['items'][0]
+    assert finding['status'] == 'UNVERIFIED' and finding['sim_step'] == 1
+    assert receipt.receipt_id in {record['receipt_id'] for record in finding['supporting_records']}
     post(collector,events[1])
     assert api.get('/api/findings').json['items'][0]['status']=='UNVERIFIED'
 

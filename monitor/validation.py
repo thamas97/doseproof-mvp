@@ -36,7 +36,7 @@ def validate_event(body: bytes, received_at_utc: str) -> dict:
     try:
         event = _decode(body)
         # Refuse overflow-to-infinity too; Python's JSON decoder allows 1e999.
-        json.dumps(event, allow_nan=False)
+        json.dumps(event, ensure_ascii=False, allow_nan=False).encode('utf-8')
     except (ValueError, UnicodeError, RecursionError):
         raise InvalidEvent('Invalid UTF-8/JSON, duplicate key, excessive nesting or non-finite number') from None
     errors = sorted(VALIDATOR.iter_errors(event), key=lambda e: str(list(e.path)))
@@ -66,8 +66,12 @@ def validate_event(body: bytes, received_at_utc: str) -> dict:
     def number(*names):
         for name in names:
             value = payload.get(name)
-            if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
-                raise InvalidEvent(f'payload.{name} must be a finite nonnegative number')
+            try:
+                if type(value) in (float, int) and value >= 0 and math.isfinite(value):
+                    continue
+            except OverflowError:
+                pass  # A JSON integer can exceed the floating-point range.
+            raise InvalidEvent(f'payload.{name} must be a finite nonnegative number')
 
     def boolean(name):
         if not isinstance(payload.get(name), bool):
@@ -85,7 +89,12 @@ def validate_event(body: bytes, received_at_utc: str) -> dict:
         text('approval_id', 'request_id', 'approver_id', 'equipment_id', 'chemical', 'expires_at_utc')
         number('approved_feed_mg_s'); utc_time(payload['expires_at_utc'])
     elif kind == 'command':
-        text('command_id', 'request_id', 'actor_id', 'equipment_id'); number('requested_feed_mg_s')
+        text('command_id', 'actor_id', 'equipment_id'); number('requested_feed_mg_s')
+        if payload.get('lab_unapproved') is True:
+            if 'request_id' not in payload or payload['request_id'] is not None or payload.get('approval_id') is not None:
+                raise InvalidEvent('Labelled lab commands must have null request and approval IDs')
+        else:
+            text('request_id')
         if 'approval_id' not in payload or (payload['approval_id'] is not None and not isinstance(payload['approval_id'], str)):
             raise InvalidEvent('payload.approval_id must be nullable text')
         if isinstance(payload['approval_id'], str) and not payload['approval_id'].strip():
