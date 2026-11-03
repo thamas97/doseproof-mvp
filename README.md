@@ -4,7 +4,7 @@ Private three-person educational workspace for Thabani, Tranos and Emmanuel. Tar
 
 ## Current status
 
-This is a starter workspace and detailed implementation runbook. It does not yet contain a runnable treatment plant, collector, evidence API or dashboard. Runtime acceptance is **Not run**. Setup helpers and contract checks do not prove that the MVP works.
+This integration branch connects the simulated plant and named operator desk to a durable event publisher, validating collector, SQLite storage, read-only evidence API and dashboard. It also saves a narrow sensor/model consistency check with supporting receipt IDs. See [the integrated evidence-path guide](docs/integrated-evidence-path.md) for startup, verification and limits. This branch incorporates the pending work from PRs #1–#3 for integration review; those PRs and main are not merged or accepted by this work. Full approval/fault assurance and human acceptance remain pending.
 
 ## Start here
 
