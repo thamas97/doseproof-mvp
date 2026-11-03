@@ -83,6 +83,8 @@ def validate_event(body: bytes, received_at_utc: str) -> dict:
     elif kind == 'plant_feedback':
         text('equipment_id'); boolean('pump_running')
         number('flow_l_s', 'actual_delivery_mg_s', 'modeled_residual_mg_l')
+        if 'accepted_feed_mg_s' in payload:
+            number('accepted_feed_mg_s')
     elif kind == 'dose_request':
         text('request_id', 'actor_id', 'equipment_id', 'chemical'); number('requested_feed_mg_s')
     elif kind == 'dose_approval':
