@@ -5,6 +5,26 @@ from monitor.storage import _utc_now
 
 EXPECTED = ('plant-model', 'sensor-a', 'sensor-b')
 RULE = 'sensor-model-consistency-v1'
+CONFLICTS = '''
+    FROM validation_errors AS error
+    JOIN raw_events AS disputed ON disputed.receipt_id = error.receipt_id
+    JOIN normalized_events AS original
+      ON original.run_id = json_extract(CAST(disputed.body AS TEXT), '$.run_id')
+     AND original.source_id = json_extract(CAST(disputed.body AS TEXT), '$.source_id')
+     AND original.event_id = json_extract(CAST(disputed.body AS TEXT), '$.event_id')
+    WHERE error.code = 'event_identity_conflict'
+'''
+
+
+def recheck_conflicts(store, receipt_id=None):
+    """Reevaluate stored observations implicated by new or historical conflicts."""
+    query = 'SELECT DISTINCT original.event_json ' + CONFLICTS
+    args = ()
+    if receipt_id is not None:
+        query += ' AND disputed.receipt_id = ?'
+        args = (receipt_id,)
+    for row in store._conn.execute(query, args).fetchall():
+        process_snapshot(store, json.loads(row['event_json']))
 
 
 def process_snapshot(store, event):
@@ -35,12 +55,13 @@ def process_snapshot(store, event):
     if any(source not in grouped for source in EXPECTED):
         return  # No complete observation set; do not invent a PASS.
     ambiguous = any(len(grouped[s]) != 1 for s in EXPECTED)
-    conflicts = []
-    for conflict in conn.execute("SELECT r.receipt_id,r.body FROM validation_errors e JOIN raw_events r ON r.receipt_id=e.receipt_id WHERE e.code='event_identity_conflict'"):
-        original = json.loads(conflict['body'])
-        if original['run_id'] == run_id and original['sim_step'] == step and original['source_id'] in EXPECTED:
-            conflicts.append({'event_id':original['event_id'], 'source_id':original['source_id'],
-                              'receipt_id':conflict['receipt_id'], 'meaning':'Conflicting source identity'})
+    conflicts = [dict(row, meaning='Conflicting source identity') for row in conn.execute(
+        'SELECT DISTINCT disputed.receipt_id, original.event_id, original.source_id ' + CONFLICTS +
+        " AND original.run_id=? AND json_extract(original.event_json,'$.sim_step')=?"
+        " AND original.source_id IN ('plant-model','sensor-a','sensor-b')"
+        " AND json_extract(original.event_json,'$.event_type') IN ('plant_feedback','sensor_observation')",
+        (run_id, step),
+    )]
     chosen = [grouped[s][-1] for s in EXPECTED]
     plant, a, b = [item['payload'] for row, item in chosen]
     usable = not ambiguous and not conflicts and plant['equipment_id'] == 'dosing-pump-1' and all(

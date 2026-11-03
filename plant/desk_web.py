@@ -42,10 +42,28 @@ LOGIN = """<h2>Operator desk sign-in</h2>
 <button>Sign in</button></form>"""
 
 HOME = """<h3>Plant now (step {{ s.sim_step }})</h3>
+{% if run %}<p>{{ run[0] }} · {{ 'Paused' if run[1] else 'Running' }}</p>{% endif %}
+{% if run and user.role == 'operator' %}
+<form method="post" action="{{ url_for('control_run') }}">
+ <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="run_id" value="{{ run[0] }}">
+ <button name="action" value="pause">Pause</button><button name="action" value="resume">Resume</button>
+ <button name="action" value="reset">Reset to new paused run</button>
+</form>
+{% endif %}
 <table><tr><th>Flow L/s</th><th>Requested feed mg/s</th><th>Accepted feed mg/s</th><th>Actual delivery mg/s</th><th>Pump</th><th>Modeled residual mg/L</th></tr>
 <tr><td>{{ '%.2f'|format(s.flow_l_s) }}</td><td>{{ '%.2f'|format(s.requested_feed_mg_s) }}</td><td>{{ '%.2f'|format(s.accepted_feed_mg_s) }}</td>
 <td>{{ '%.2f'|format(s.actual_delivery_mg_s) }}</td><td>{{ 'running' if s.pump_running else 'stopped' }}</td><td>{{ '%.4f'|format(s.modeled_residual_mg_l) }}</td></tr></table>
 <p class="muted">Accepted feed is the controller setting; actual delivery is what the pump delivers; the residual responds after a delay.</p>
+{% if user.role == 'operator' %}
+{% if lab_mode %}
+<h3>Lab only · Unapproved change</h3>
+<form method="post" action="{{ url_for('execute_lab') }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+ <label>Feed (mg/s) <input name="requested_feed_mg_s" size="6" value="20" required></label>
+ <label>Reason <input name="reason" maxlength="1000" required></label>
+ <button>Execute labelled lab-unapproved change</button>
+</form>
+{% else %}<p>Lab-unapproved path is disabled.</p>{% endif %}
+{% endif %}
 {% if user.role == 'requester' %}
 <h3>New dose request</h3>
 <form method="post" action="{{ url_for('create_request') }}"><input type="hidden" name="csrf" value="{{ csrf }}">
@@ -67,7 +85,7 @@ HOME = """<h3>Plant now (step {{ s.sim_step }})</h3>
 </table>"""
 
 
-def create_desk_app(desk: Desk, plant_state: Callable[[], object]) -> Flask:
+def create_desk_app(desk: Desk, plant_state: Callable[[], object], *, control=None, run_state=None) -> Flask:
     app = Flask(__name__)
     app.config.update(
         SECRET_KEY=secrets.token_hex(32),  # new random key every start; never stored
@@ -96,8 +114,10 @@ def create_desk_app(desk: Desk, plant_state: Callable[[], object]) -> Flask:
                                       message=message, error=error)
 
     def home_page(message=None, error=False):
-        reqs = sorted(desk.requests.values(), key=lambda r: r.created_at, reverse=True)
-        return render(HOME, message, error, s=plant_state(), reqs=reqs)
+        with desk._lock:
+            reqs = sorted(desk.requests.values(), key=lambda r: r.created_at, reverse=True)
+        return render(HOME, message, error, s=plant_state(), reqs=reqs,
+                      run=run_state() if run_state else None, lab_mode=desk.lab_mode)
 
     @app.route("/", methods=["GET"])
     def index():
@@ -144,5 +164,15 @@ def create_desk_app(desk: Desk, plant_state: Callable[[], object]) -> Flask:
     @app.route("/requests/<request_id>/execute", methods=["POST"])
     def execute(request_id):
         return act(lambda u: f"Command sent; status: {desk.execute(u, request_id).status}.")
+
+    @app.post('/simulation/control')
+    def control_run():
+        if control is None:
+            abort(404)
+        return act(lambda u: control(u, request.form.get('action', ''), request.form.get('run_id')))
+
+    @app.post('/simulation/lab-unapproved')
+    def execute_lab():
+        return act(lambda u: f"Lab command {desk.execute_lab(u, request.form.get('requested_feed_mg_s'), request.form.get('reason', ''))} recorded.")
 
     return app

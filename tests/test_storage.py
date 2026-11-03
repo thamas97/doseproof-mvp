@@ -8,6 +8,7 @@ import sys
 
 import pytest
 
+from monitor import storage
 from monitor.storage import EvidenceStore, open_read_only
 
 
@@ -35,7 +36,7 @@ def test_initialization_has_six_empty_categories_and_is_repeatable(database):
     with open_read_only(database) as conn:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert tables == {'raw_events', 'validation_errors', 'normalized_events', 'linked_evidence', 'source_health', 'verdicts'}
-        assert conn.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert conn.execute('PRAGMA user_version').fetchone()[0] == storage.SCHEMA_VERSION
         assert conn.execute('PRAGMA foreign_keys').fetchone()[0] == 1
         assert conn.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert conn.execute('PRAGMA foreign_key_check').fetchall() == []
@@ -221,6 +222,26 @@ def test_refuses_unrelated_database_even_if_schema_version_is_one(database):
         conn.execute('PRAGMA user_version=1')
     with pytest.raises(RuntimeError, match='not identified'):
         EvidenceStore(database)
+
+
+def test_upgrade_prevents_replacement_of_existing_evidence(database, event, monkeypatch):
+    with monkeypatch.context() as legacy:
+        legacy.setattr(storage, 'SCHEMA_VERSION', 1)
+        legacy.setattr(storage, 'MIGRATIONS', ('001_evidence.sql',))
+        with EvidenceStore(database) as store:
+            receipt = store.write_raw(body(event))
+            outcome = store.write_normalized(receipt.receipt_id, event)
+    with EvidenceStore(database) as store:
+        conn = store._conn
+        assert conn.execute('PRAGMA user_version').fetchone()[0] == 2
+        conn.execute('PRAGMA recursive_triggers=OFF')
+        with pytest.raises(sqlite3.IntegrityError, match='original receipts are immutable'), conn:
+            conn.execute('INSERT OR REPLACE INTO raw_events VALUES (?,?,?,?,?,?)',
+                         (receipt.receipt_id, receipt.received_at_utc, b'changed', '0' * 64, None, None))
+        with pytest.raises(sqlite3.IntegrityError, match='normalized evidence is immutable'), conn:
+            conn.execute('INSERT OR REPLACE INTO normalized_events SELECT * FROM normalized_events')
+        assert store.read_raw(receipt.receipt_id).body == receipt.body
+        assert store.read_normalized(outcome.normalized_id) == event
 
 
 def test_fixture_check_exports_actual_bytes_and_explicit_pending_integration(tmp_path):

@@ -60,13 +60,15 @@ class DoseRequest:
 
 class Desk:
     def __init__(self, emit: Callable[..., dict], execute: Callable[[str, str, float, datetime], None],
-                 audit_path: Path, clock: Callable[[], datetime] = _now) -> None:
+                 audit_path: Path, clock: Callable[[], datetime] = _now, *, lab_mode: bool = False) -> None:
         """emit(event_type, payload, change_id) publishes a source event.
         execute(command_id, change_id, feed, expires_at) writes through the private controller path."""
         self._emit = emit
         self._execute = execute
         self._clock = clock
         self._lock = threading.RLock()
+        self.lab_mode = lab_mode
+        self._in_flight = 0
         self.requests: dict[str, DoseRequest] = {}
         self.audit_path = audit_path
         audit_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,19 +90,22 @@ class Desk:
             self._refuse(user, action, "Unknown request ID.", request_id)
         return req
 
+    def _validated_feed(self, user, action, requested_feed_mg_s) -> float:
+        try:
+            value = float(requested_feed_mg_s)
+        except (TypeError, ValueError, OverflowError):
+            self._refuse(user, action, "Requested feed must be a number.")
+        rounded_feed = round(value, 2)
+        if not (MIN_FEED_MG_S < value <= MAX_FEED_MG_S) or rounded_feed <= MIN_FEED_MG_S:
+            self._refuse(user, action, f"Requested feed must be positive at 0.01 mg/s resolution and at most {MAX_FEED_MG_S:g} mg/s.")
+        return rounded_feed
+
     # --- 1. request ------------------------------------------------------------------
     def create_request(self, user: DeskUser, requested_feed_mg_s: float) -> DoseRequest:
         with self._lock:
             if user.role != "requester":
                 self._refuse(user, "request", "Only a requester can create a dose request.")
-            try:
-                value = float(requested_feed_mg_s)
-            except (TypeError, ValueError):
-                self._refuse(user, "request", "Requested feed must be a number.")
-            rounded_feed = round(value, 2)
-            if not (MIN_FEED_MG_S < value <= MAX_FEED_MG_S) or rounded_feed <= MIN_FEED_MG_S:
-                self._refuse(user, "request", f"Requested feed must be positive at 0.01 mg/s resolution and at most {MAX_FEED_MG_S:g} mg/s.")
-            value = rounded_feed
+            value = self._validated_feed(user, "request", requested_feed_mg_s)
             req = DoseRequest(
                 request_id=f"req-{uuid.uuid4().hex[:12]}", change_id=f"chg-{uuid.uuid4().hex[:12]}",
                 actor_id=user.user_id, equipment_id=EQUIPMENT_ID, chemical=CHEMICAL, target=TARGET,
@@ -169,6 +174,7 @@ class Desk:
             req.status = "sent"
             self._emit("command", dict(req.command), req.change_id)
             self._audit(user, "execute", "sent", f"{req.requested_feed_mg_s} mg/s", request_id)
+            self._in_flight += 1
         # write outside the lock: the controller's acknowledgement calls back into the desk
         try:
             self._execute(req.command["command_id"], req.change_id, req.requested_feed_mg_s, expires)
@@ -177,7 +183,46 @@ class Desk:
                 req.status = "not acknowledged"
             self._audit(user, "execute", "failed", f"controller write failed: {exc}", request_id)
             raise DeskError("The controller did not accept the command. See the plant log.") from exc
+        finally:
+            with self._lock:
+                self._in_flight -= 1
         return req
+
+    def execute_lab(self, user: DeskUser, requested_feed_mg_s, reason: str) -> str:
+        action = "lab_unapproved_change"
+        with self._lock:
+            if not self.lab_mode or user.role != "operator":
+                self._refuse(user, action, "Lab-unapproved changes require an operator and enabled lab mode.")
+            if self._in_flight:
+                self._refuse(user, action, "Wait for the current command to finish.")
+            reason = reason.strip()
+            if not 1 <= len(reason) <= 1000:
+                self._refuse(user, action, "Enter a lab reason of 1–1000 characters.")
+            value = self._validated_feed(user, action, requested_feed_mg_s)
+            command_id = f"cmd-{uuid.uuid4().hex[:12]}"
+            change_id = f"chg-{uuid.uuid4().hex[:12]}"
+            self._emit("lab_action", {
+                "actor_id": user.user_id, "equipment_id": EQUIPMENT_ID, "action": action,
+                "reason": reason, "approved": False, "command_id": command_id,
+                "requested_feed_mg_s": value,
+            }, change_id)
+            self._emit("command", {
+                "actor_id": user.user_id, "equipment_id": EQUIPMENT_ID, "command_id": command_id,
+                "request_id": None, "approval_id": None, "requested_feed_mg_s": value,
+                "lab_unapproved": True,
+            }, change_id)
+            self._audit(user, action, "sent", f"{command_id}: {reason}")
+            self._in_flight += 1
+            expires = self._clock() + timedelta(seconds=10)
+        try:
+            self._execute(command_id, change_id, value, expires)
+        except Exception as exc:
+            self._audit(user, action, "failed", f"{command_id}: {exc}")
+            raise DeskError("The lab command outcome could not be confirmed. See the plant log.") from exc
+        finally:
+            with self._lock:
+                self._in_flight -= 1
+        return command_id
 
     # --- 4. acknowledgement (called by the controller side) ---------------------------------
     def record_acknowledgement(self, command_id: str, ack: dict) -> None:

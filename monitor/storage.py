@@ -16,7 +16,8 @@ from typing import Any, Literal
 from uuid import uuid4
 
 
-SCHEMA_VERSION = 1
+MIGRATIONS = ('001_evidence.sql', '002_prevent_replacement.sql')
+SCHEMA_VERSION = len(MIGRATIONS)
 APPLICATION_ID = 0x44504D31  # DPM1; distinguish this database from unrelated files.
 DEFAULT_DATABASE = Path('doseproof.db')
 
@@ -98,31 +99,29 @@ class EvidenceStore:
         try:
             version = self._conn.execute('PRAGMA user_version').fetchone()[0]
             application_id = self._conn.execute('PRAGMA application_id').fetchone()[0]
-            if version == SCHEMA_VERSION:
+            if not 0 <= version <= SCHEMA_VERSION:
+                raise RuntimeError(f'Unsupported database schema version: {version}')
+            if version:
                 if application_id != APPLICATION_ID:
                     raise RuntimeError('Database is not identified as DoseProof MVP')
-                self._conn.commit()
-                return
-            if version != 0:
-                raise RuntimeError(f'Unsupported database schema version: {version}')
-            if application_id not in (0, APPLICATION_ID):
-                raise RuntimeError('Database belongs to another application')
-            objects = self._conn.execute(
-                "SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
-            ).fetchall()
-            if objects:
-                raise RuntimeError('Refusing to initialize a nonempty unversioned database')
-            migration = Path(__file__).with_name('migrations') / '001_evidence.sql'
-            statement = ''
-            for line in migration.read_text(encoding='utf-8').splitlines(keepends=True):
-                statement += line
-                if sqlite3.complete_statement(statement):
-                    self._conn.execute(statement)
-                    statement = ''
-            if statement.strip():
-                raise RuntimeError('Incomplete schema migration')
-            self._conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
-            self._conn.execute(f'PRAGMA application_id = {APPLICATION_ID}')
+            else:
+                if application_id not in (0, APPLICATION_ID):
+                    raise RuntimeError('Database belongs to another application')
+                if self._conn.execute("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchone():
+                    raise RuntimeError('Refusing to initialize a nonempty unversioned database')
+                self._conn.execute(f'PRAGMA application_id = {APPLICATION_ID}')
+            for filename in MIGRATIONS[version:]:
+                migration = Path(__file__).with_name('migrations') / filename
+                statement = ''
+                for line in migration.read_text(encoding='utf-8').splitlines(keepends=True):
+                    statement += line
+                    if sqlite3.complete_statement(statement):
+                        self._conn.execute(statement)
+                        statement = ''
+                if statement.strip():
+                    raise RuntimeError('Incomplete schema migration')
+            if version < SCHEMA_VERSION:
+                self._conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
             self._conn.commit()
         except BaseException:
             self._conn.rollback()

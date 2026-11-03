@@ -87,12 +87,14 @@ def test_events_match_shared_contract():
 def test_observer_serves_reads_and_refuses_network_writes():
     async def scenario():
         observer = ObserverServer("127.0.0.1", TEST_PORT)
-        observer.update(list(range(100, 113)))
         task = asyncio.create_task(observer.serve())
         await asyncio.sleep(0.3)
         client = AsyncModbusTcpClient("127.0.0.1", port=TEST_PORT)
         await client.connect()
         try:
+            initial = await client.read_holding_registers(0, count=13, device_id=1)
+            assert initial.registers[8:13] == [3, 3, 65535, 65535, 0]
+            observer.update(list(range(100, 113)))
             read = await client.read_holding_registers(0, count=13, device_id=1)
             assert read.registers == list(range(100, 113))
             observer.update([7] * 13)                       # internal update still works
