@@ -13,6 +13,7 @@ from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
 from monitor.processing import process_snapshot, recheck_conflicts
+from monitor.assurance import evaluate_change, process_assurance, sweep_pending
 from monitor.storage import EvidenceStore
 from monitor.validation import InvalidEvent, validate_event
 
@@ -30,6 +31,9 @@ def create_app(path=None):
     app.extensions['write_lock'] = threading.Lock()
     with EvidenceStore(app.config['DATABASE']) as store:
         recheck_conflicts(store)
+        for row in store._conn.execute('SELECT DISTINCT run_id, change_id FROM normalized_events '
+                                       'WHERE change_id IS NOT NULL').fetchall():
+            evaluate_change(store._conn, row['run_id'], row['change_id'])
 
     @app.post('/intake/events')
     def intake():
@@ -52,6 +56,7 @@ def create_app(path=None):
                     return jsonify(receipt_id=receipt.receipt_id, processing='conflict', error_id=outcome.error_id), 409
                 # Also retries may finish derived processing after an earlier failure.
                 process_snapshot(store, event)
+                process_assurance(store, event)
                 return jsonify(receipt_id=receipt.receipt_id, normalized_id=outcome.normalized_id,
                                processing=outcome.outcome, meaning='Evidence received; no authorization or safety verdict implied'), 201 if outcome.outcome == 'created' else 200
         except (sqlite3.Error, OSError):
@@ -70,11 +75,26 @@ def create_app(path=None):
 def main():
     logging.basicConfig(level=logging.INFO)
     # Monitoring listeners always bind loopback; no inherited plant control host.
-    server = make_server('127.0.0.1', int(os.environ.get('MVP_COLLECTOR_PORT', '5001')), create_app(), threaded=False)
+    app = create_app()
+    server = make_server('127.0.0.1', int(os.environ.get('MVP_COLLECTOR_PORT', '5001')), app, threaded=False)
+    stopped = threading.Event()
+
+    def check_deadlines():
+        while not stopped.wait(1):
+            try:
+                with app.extensions['write_lock'], EvidenceStore(app.config['DATABASE']) as store:
+                    sweep_pending(store)
+            except (sqlite3.Error, OSError):
+                app.logger.exception('Could not refresh evidence deadlines')
+
+    worker = threading.Thread(target=check_deadlines, daemon=True)
+    worker.start()
     try:
         server.serve_forever()
     finally:
+        stopped.set()
         server.server_close()
+        worker.join(timeout=6)
 
 
 if __name__ == '__main__':

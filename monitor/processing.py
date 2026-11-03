@@ -2,6 +2,7 @@
 import json
 
 from monitor.storage import _utc_now
+from monitor.assurance import process_assurance
 
 EXPECTED = ('plant-model', 'sensor-a', 'sensor-b')
 RULE = 'sensor-model-consistency-v1'
@@ -24,7 +25,9 @@ def recheck_conflicts(store, receipt_id=None):
         query += ' AND disputed.receipt_id = ?'
         args = (receipt_id,)
     for row in store._conn.execute(query, args).fetchall():
-        process_snapshot(store, json.loads(row['event_json']))
+        event = json.loads(row['event_json'])
+        process_snapshot(store, event)
+        process_assurance(store, event)
 
 
 def process_snapshot(store, event):

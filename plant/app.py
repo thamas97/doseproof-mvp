@@ -54,6 +54,7 @@ class Plant:
         self.sensor_b = SensorAdapter(self.baseline.sensor_b)
         self.ack_counter = 0
         self.paused = False
+        self.sensor_a_suppressed = False
         run_dir = self.settings.evidence_dir / self.run_id
         self.events = EventFactory(self.run_id)
         self.publisher = Publisher(self.settings.collector_url, run_dir / "plant-source-records.jsonl")
@@ -71,21 +72,22 @@ class Plant:
     # --- plant tick ------------------------------------------------------------------------
     def tick(self) -> list[int]:
         state = self.model.step()
-        a = self.sensor_a.sample(state.modeled_residual_mg_l, state.sim_step)
+        a = None if self.sensor_a_suppressed else self.sensor_a.sample(state.modeled_residual_mg_l, state.sim_step)
         b = self.sensor_b.sample(state.modeled_residual_mg_l, state.sim_step)
         snapshot = build_snapshot(
-            state, a, b, a.quality, b.quality,
+            state, self.sensor_a.last_sample, b, a.quality if a else 'unavailable', b.quality,
             self.sensor_a.age_steps(state.sim_step), self.sensor_b.age_steps(state.sim_step),
             self.ack_counter,
         )
         self.observer.update(snapshot)
-        for event in (plant_feedback(self.events, state), sensor_observation(self.events, a),
-                      sensor_observation(self.events, b)):
-            self.publisher.publish(event)
+        self.publisher.publish(plant_feedback(self.events, state))
+        if a is not None:
+            self.publisher.publish(sensor_observation(self.events, a))
+        self.publisher.publish(sensor_observation(self.events, b))
         log.info(
-            "step %d  flow %.2f L/s  accepted %.2f mg/s  delivery %.2f mg/s  residual %.4f  A %.3f  B %.3f",
+            "step %d  flow %.2f L/s  accepted %.2f mg/s  delivery %.2f mg/s  residual %.4f  A %s  B %.3f",
             state.sim_step, state.flow_l_s, state.accepted_feed_mg_s, state.actual_delivery_mg_s,
-            state.modeled_residual_mg_l, a.value_mg_l, b.value_mg_l,
+            state.modeled_residual_mg_l, f'{a.value_mg_l:.3f}' if a else 'unavailable', b.value_mg_l,
         )
         return snapshot
 
@@ -144,6 +146,7 @@ class Plant:
                 self.model.reset()
                 self.sensor_a.reset()
                 self.sensor_b.reset()
+                self.sensor_a_suppressed = False
                 self.ack_counter = 0
                 self.observer.clear()
                 self.desk.requests.clear()
@@ -151,10 +154,27 @@ class Plant:
                 self.paused = True
             elif action in ('pause', 'resume'):
                 self.paused = action == 'pause'
+            elif action in ('stop-pump', 'suppress-a'):
+                if not self.desk.lab_mode:
+                    self.desk._refuse(user, action, 'Enable local lab mode before applying a demo fault.')
+                if (action == 'stop-pump' and not self.model.pump_running or
+                        action == 'suppress-a' and self.sensor_a_suppressed):
+                    self.desk._refuse(user, action, 'This fault is already active. Reset to clear it.')
+                self._desk_emit('lab_action', {
+                    'actor_id': user.user_id, 'action': action,
+                    'equipment_id': 'dosing-pump-1' if action == 'stop-pump' else 'contact-tank',
+                    'reason': 'Labelled demo fault. Reset clears it.',
+                }, 'chg-' + uuid.uuid4().hex[:12])
+                if action == 'stop-pump':
+                    self.model.set_pump_running(False)
+                else:
+                    self.sensor_a_suppressed = True
             else:
                 self.desk._refuse(user, action, 'Unknown simulation control.')
             state = 'paused' if self.paused else 'running'
             self.desk._audit(user, action, 'recorded', f'{self.run_id} is {state}')
+            if action in ('stop-pump', 'suppress-a'):
+                return f'Lab fault {action} recorded for {self.run_id}. Reset clears it.'
             return f'{self.run_id} is {state}.'
 
     # --- run -------------------------------------------------------------------------------
