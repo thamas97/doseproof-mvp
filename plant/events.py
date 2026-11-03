@@ -33,10 +33,12 @@ class EventFactory:
     def __init__(self, run_id: str) -> None:
         self.run_id = run_id
         self._seq: dict[str, int] = {}
+        self._lock = threading.Lock()  # desk (web thread) and plant tick both create events
 
     def make(self, source_id, event_type, sim_step, payload, source_time=None, change_id=None) -> dict:
-        seq = self._seq.get(source_id, 0)
-        self._seq[source_id] = seq + 1
+        with self._lock:
+            seq = self._seq.get(source_id, 0)
+            self._seq[source_id] = seq + 1
         source_time = source_time or utc_now()
         return {
             "schema_version": SCHEMA_VERSION,
@@ -89,11 +91,12 @@ class Publisher:
         self.failed = 0
         jsonl_path.parent.mkdir(parents=True, exist_ok=True)
         self._queue: queue.Queue[str] = queue.Queue(maxsize=10000)
+        self._file_lock = threading.Lock()
         threading.Thread(target=self._send_loop, name="collector-sender", daemon=True).start()
 
     def publish(self, event: dict) -> None:
         line = json.dumps(event, separators=(",", ":"))
-        with self.jsonl_path.open("a", encoding="utf-8") as f:
+        with self._file_lock, self.jsonl_path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
         try:
             self._queue.put_nowait(line)

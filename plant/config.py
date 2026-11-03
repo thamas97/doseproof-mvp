@@ -60,6 +60,8 @@ def load_baseline(path: Path = BASELINE_FILE) -> Baseline:
 class ServiceSettings:
     bind_host: str
     observer_port: int
+    controller_port: int
+    desk_port: int
     collector_url: str
     evidence_dir: Path
 
@@ -70,6 +72,8 @@ def load_service_settings() -> ServiceSettings:
     return ServiceSettings(
         bind_host=host,
         observer_port=int(os.environ.get("MVP_OBSERVER_PORT", "1502")),
+        controller_port=int(os.environ.get("MVP_CONTROLLER_PORT", "1503")),
+        desk_port=int(os.environ.get("MVP_DESK_PORT", "5000")),
         collector_url=f"http://{host}:{collector_port}/intake/events",
         evidence_dir=ROOT / "evidence",
     )
