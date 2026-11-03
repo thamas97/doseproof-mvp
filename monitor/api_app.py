@@ -152,7 +152,7 @@ def create_app(path=None):
                     'acknowledgement' if finding['rule_id'] == ACTION_RULE else 'lab_action')]
                 observations = []
                 if len(anchors) == 1:
-                    first = anchors[0]['sim_step'] + 1
+                    first = int(anchors[0]['sim_step']) + 1
                     window = 8 if finding['rule_id'] == ACTION_RULE else 10
                     observations = step_observations(conn, run_id, first, first + window - 1)
                 items.append({**finding, 'recorded_at_utc': row['recorded_at_utc'],

@@ -133,7 +133,7 @@ def step_observations(conn, run_id, first, last):
 def evaluate_fault(conn, run_id, change_id, marker_row, markers, now):
     marker = marker_row['event']
     pump = marker['payload']['action'] == 'stop-pump'
-    first = marker['sim_step'] + 1
+    first = int(marker['sim_step']) + 1
     last = first if pump else first + 9
     observations = step_observations(conn, run_id, first, last)
     rows = markers + observations

@@ -1,6 +1,6 @@
 # MVP acceptance register
 
-All runtime checks are Not run. Human acceptance is pending.
+The table tracks formal acceptance. Candidate verification observations are recorded below. Human acceptance is pending.
 
 | Check | Meaning | Runtime result | Review |
 | --- | --- | --- | --- |
@@ -36,3 +36,22 @@ and replay; original bytes matched the source outbox, invalid input was retained
 and POST on the evidence API was refused. See [the verification report](milestone-verification.md).
 These observations do not sign off the full scenario matrix above. Full approval/
 fault assurance, visual dashboard inspection and all human acceptance remain pending.
+
+## Five-scenario candidate verification (3 November 2026)
+
+A local run at implementation commit a6b0b44 exercised the real HTTP, Modbus,
+and SQLite path. The recorded outcomes below await teammate review.
+
+| Check | Observed result |
+| --- | --- |
+| AC-00 | Ten baseline steps at 10 L/s flow, 15 mg/s delivery and 1.00 mg/L modeled residual, with distinct A/B samples. |
+| AC-01 | Approval and controller response PASS. Delivery reached 20 mg/s and the modeled residual first rose at step 5. |
+| AC-02 | Labelled lab command produced an approval FAIL with the command and acknowledgement visible and no approval event. |
+| AC-03 | Accepted setting stayed at 20 mg/s while delivery fell to zero. The saved pump fault was FAIL. |
+| AC-04 | Sensor A became unavailable while B stayed fresh. The saved missing-evidence finding was UNVERIFIED. |
+| AC-07 | An original acknowledgement receipt matched the source bytes after the collector and API restarted. |
+| AC-08 | POST, PUT, PATCH, and DELETE requests to the evidence changes endpoint returned 405. |
+
+The rehearsal steps are in the [five-scenario guide](demo-rehearsal.md).
+Original records, captures and the verification manifest are retained locally.
+Independent startup, teammate access and human acceptance remain pending.

@@ -79,3 +79,18 @@ def test_action_deadline_and_identity_conflict(tmp_path):
     result, = api.get('/api/changes').json['items']
     assert result['change_id'] == 'change' and result['status'] == 'UNVERIFIED'
     assert response.json['receipt_id'] in {record['receipt_id'] for record in result['supporting_records']}
+
+
+def test_fault_step_numbers_use_safe_observation_windows(tmp_path):
+    db = tmp_path / 'test.db'
+    collector, api = collector_app(db).test_client(), api_app(db).test_client()
+    events = EventFactory('run-numeric')
+    fault = events.make('operator-desk', 'lab_action', 1.0, {
+        'actor_id': 'tranos', 'equipment_id': 'contact-tank', 'action': 'suppress-a', 'reason': 'test',
+    }, change_id='missing-a')
+    assert collector.post('/intake/events', json=fault).status_code == 201
+    assert api.get('/api/changes').json['items'][0]['status'] == 'PENDING'
+    oversized = dict(fault, sim_step=10 ** 50)
+    rejected = collector.post('/intake/events', json=oversized)
+    assert rejected.status_code == 422
+    assert api.get('/api/receipts/' + rejected.json['receipt_id']).json['validation_errors']

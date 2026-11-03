@@ -43,6 +43,8 @@ def validate_event(body: bytes, received_at_utc: str) -> dict:
     if errors:
         error = errors[0]
         raise InvalidEvent(f"Envelope field {'/'.join(map(str, error.path)) or '/'}: {error.validator} check failed")
+    if event['sim_step'] > (1 << 63) - 11:
+        raise InvalidEvent('sim_step exceeds the stored observation window range')
     for name in ('run_id', 'event_id', 'source_id'):
         if not event[name].strip() or len(event[name]) > 200:
             raise InvalidEvent(f'{name} must contain 1–200 nonblank characters')
