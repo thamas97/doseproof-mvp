@@ -246,6 +246,20 @@ class Desk:
             raise DeskError("The controller did not accept the lab command. See the plant log.") from exc
         return lab
 
+    # --- lab fault simulation (DPM-18) -------------------------------------------------------
+    def record_lab_fault(self, user: DeskUser, action: str, equipment_id: str, reason: str, change_id: str) -> None:
+        """Operator-only, labelled simulation of an equipment/monitoring fault. Not an approval."""
+        with self._lock:
+            if user.role != "operator":
+                self._refuse(user, action, "Only the lab operator can simulate faults.")
+            reason = (reason or "").strip() or "DPM-18 labelled fault simulation"
+            self._emit("lab_action", {
+                "lab_action_id": f"lab-{uuid.uuid4().hex[:12]}", "actor_id": user.user_id,
+                "equipment_id": equipment_id, "action": action, "reason": reason,
+                "simulated_fault": True, "approved": False,
+            }, change_id)
+            self._audit(user, action, "recorded", f"{equipment_id}; reason: {reason}", change_id)
+
     # --- 4. acknowledgement (called by the controller side) ---------------------------------
     def record_acknowledgement(self, command_id: str, ack: dict) -> None:
         with self._lock:

@@ -19,11 +19,11 @@ Needs Python 3.12 (`py --list` must show 3.12), Node.js and Git.
 
 ```powershell
 git fetch origin
-git checkout DPM-15-approved-and-lab-changes   # contains DPM-9 and DPM-12 as well
+git checkout DPM-18-stopped-pump-missing-a      # newest branch; contains DPM-9, 12 and 15
 powershell -NoProfile -File .\scripts\setup-python.ps1
 git restore requirements.lock.txt               # the setup script rewrites it; keep the team copy
 npm.cmd --prefix fuxa ci
-.\.venv\Scripts\python.exe -m pytest tests -q   # expect: 28 passed
+.\.venv\Scripts\python.exe -m pytest tests -q   # expect: 31 passed
 ```
 
 ### Desk passwords (each person sets their own; never share or commit)
@@ -80,6 +80,19 @@ Start the plant and watch 10 steps: flow 10.00, delivery 15.00, residual 1.0000,
 4. Export: `.\.venv\Scripts\python.exe scripts\export-check.py <run_id> AC-02`
 5. **Restore normal controls:** Ctrl+C, `Remove-Item Env:MVP_LAB_MODE`, start again. The desk shows *Lab-unapproved path is disabled*.
 
+### AC-03 Stopped pump (lab fault simulation, operator only)
+1. Run AC-01 steps 1–3 (approved 20 mg/s), then let it run at least **64 steps**; residual settles at 1.5000.
+2. As **Tranos**, in the orange **LAB FAULT SIMULATION** box: *Stop pump*. Accepted feed stays 20, actual delivery 0, pump 0.
+3. Residual stays ~1.50 for 4 more steps (water already dosed), then follows the model down (1.20, 0.96, ...). Pause.
+4. Export `AC-03`, then *Restart pump* to restore health (or Reset).
+
+### AC-04 Missing Sensor A
+1. As **Tranos**: Reset, Resume, then *Suppress Sensor A*. Wait 10 steps.
+2. No new `sensor-a` records; B and plant feedback continue. FUXA keeps A's last real value; A age counts up; A quality 0 good, then 1 uncertain from age 3, then 3 unavailable from age 10. No zero is invented.
+3. Pause, export `AC-04`, then *Restore Sensor A*.
+
+Fault actions are recorded as `lab_action` (actor tranos, `simulated_fault: true`, `approved: false`); simulate and restore share one `change_id`. Reset clears all faults.
+
 Exports go to `evidence/<run_id>/checks/<check_id>/` (`source-records.jsonl` + `result-draft.md`). Add your own `screen.png`; Result and Reviewer stay *Not run* / *Pending* until a person completes them.
 
 ## Troubleshooting
@@ -99,4 +112,5 @@ Exports go to `evidence/<run_id>/checks/<check_id>/` (`source-records.jsonl` + `
 - Collector (5001) may not be running yet; copies are logged as not sent and the local JSONL is kept.
 - Desk request state is in memory; Reset or restart clears the desk list (records stay on disk).
 - No login rate limiting. Same-Windows-account processes are not isolated.
-- Sensor missing/stale and stopped-pump cases arrive in DPM-18.
+- Sensor thresholds (stale at 3 steps, unavailable at 10) follow the runbook MVP values and need recorded team review.
+- While Sensor A is suppressed its random generator does not advance, so A values after restore differ from an unfaulted run.

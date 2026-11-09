@@ -52,6 +52,13 @@ HOME = """<h3>Plant now (step {{ s.sim_step }}){% if c %} &middot; run <code>{{ 
 {% if c.paused %}<form class="inline" method="post" action="{{ url_for('control', action='resume') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Resume</button></form>
 {% else %}<form class="inline" method="post" action="{{ url_for('control', action='pause') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Pause</button></form>{% endif %}
 <p class="muted">Reset keeps earlier evidence folders. Pause stops simulation steps; real time continues.</p>
+<div style="border:2px dashed #b9770e;padding:8px 12px;margin:10px 0;background:#fef5e7">
+<b>LAB FAULT SIMULATION</b> (recorded as lab_action by {{ user.display_name }}; not an approval)<br>
+{% for key, on_label, off_label in [('pump_stopped','Stop pump','Restart pump'), ('sensor_a_missing','Suppress Sensor A','Restore Sensor A')] %}
+<form class="inline" method="post" action="{{ url_for('fault', fault=key, state=('off' if key in c.faults else 'on')) }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button>{{ off_label if key in c.faults else on_label }}</button></form>
+{% endfor %}
+<span class="muted">Active: {{ ', '.join(c.faults.keys()) if c.faults else 'none' }}</span></div>
 {% if desk.lab_mode %}
 <div style="border:2px solid #c0392b;padding:8px 12px;margin:10px 0;background:#fdecea">
 <b>LAB MODE: UNAPPROVED CHANGE</b>. Recorded as a lab_action by {{ user.display_name }} with <b>no approval</b>.
@@ -167,6 +174,15 @@ def create_desk_app(desk: Desk, plant_state: Callable[[], object], controls=None
     @app.route("/lab", methods=["POST"])
     def lab_apply():
         return act(lambda u: f"Lab action {desk.lab_apply(u, request.form.get('requested_feed_mg_s'), request.form.get('reason')).lab_action_id} sent (UNAPPROVED).")
+
+    @app.route("/fault/<fault>/<state>", methods=["POST"])
+    def fault(fault, state):
+        def run(user):
+            if controls is None or fault not in ("pump_stopped", "sensor_a_missing") or state not in ("on", "off"):
+                raise DeskError("Unknown fault control.")
+            controls.set_fault(user, fault, state == "on", request.form.get("reason", ""))
+            return f"Lab fault {fault} {'ACTIVE' if state == 'on' else 'restored'} at step {plant_state().sim_step}."
+        return act(run)
 
     @app.route("/control/<action>", methods=["POST"])
     def control(action):

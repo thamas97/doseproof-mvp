@@ -64,6 +64,7 @@ class Plant:
         self.sensor_a = SensorAdapter(self.baseline.sensor_a)
         self.sensor_b = SensorAdapter(self.baseline.sensor_b)
         self.ack_counter = 0
+        self.faults: dict[str, str] = {}  # active lab faults -> change_id (cleared by reset)
         self.registry.clear()
         self._run_dir = self.settings.evidence_dir / self.run_id
         self.events = EventFactory(self.run_id)
@@ -81,6 +82,30 @@ class Plant:
         log.info("RESET: new run %s at step 0 (%s)", self.run_id, "paused" if paused else "running")
         return self.run_id
 
+    def set_fault(self, user, fault: str, active: bool, reason: str) -> str:
+        """Labelled lab fault simulation (DPM-18). fault: 'pump_stopped' or 'sensor_a_missing'.
+        Recorded as a lab_action by the operator; restore uses the same change_id."""
+        if fault not in ("pump_stopped", "sensor_a_missing"):
+            raise ValueError("unknown fault")
+        with self._lock:
+            if active == (fault in self.faults):
+                return self.faults.get(fault, "")
+            change_id = self.faults.get(fault) or f"chg-fault-{uuid.uuid4().hex[:12]}"
+            action = ("simulate_" if active else "restore_") + fault
+            equipment = "dosing-pump-1" if fault == "pump_stopped" else "sensor-a"
+            self.desk.record_lab_fault(user, action, equipment, reason, change_id)
+            if fault == "pump_stopped":
+                self.model.set_pump_running(not active)
+            else:
+                self.sensor_a.suppressed = active
+            if active:
+                self.faults[fault] = change_id
+            else:
+                self.faults.pop(fault, None)
+            self._refresh_observer()
+        log.warning("LAB FAULT %s at step %d by %s (%s)", action, self.model.sim_step, user.user_id, change_id)
+        return change_id
+
     def pause(self) -> None:
         self.paused = True
         log.info("PAUSED at step %d", self.model.sim_step)
@@ -92,9 +117,9 @@ class Plant:
     # --- plant tick ------------------------------------------------------------------------
     def _refresh_observer(self) -> list[int]:
         state = self.model.state()
-        a, b = self.sensor_a.last_sample, self.sensor_b.last_sample
+        a, b = self.sensor_a.last_sample, self.sensor_b.last_sample  # retained last real samples
         snapshot = build_snapshot(
-            state, a, b, "good" if a else "unavailable", "good" if b else "unavailable",
+            state, a, b, self.sensor_a.quality(state.sim_step), self.sensor_b.quality(state.sim_step),
             self.sensor_a.age_steps(state.sim_step), self.sensor_b.age_steps(state.sim_step),
             self.ack_counter,
         )
@@ -107,13 +132,15 @@ class Plant:
             a = self.sensor_a.sample(state.modeled_residual_mg_l, state.sim_step)
             b = self.sensor_b.sample(state.modeled_residual_mg_l, state.sim_step)
             snapshot = self._refresh_observer()
-            for event in (plant_feedback(self.events, state), sensor_observation(self.events, a),
-                          sensor_observation(self.events, b)):
-                self.publisher.publish(event)
+            self.publisher.publish(plant_feedback(self.events, state))
+            for sample in (a, b):
+                if sample is not None:  # a suppressed sensor publishes nothing (no invented zero)
+                    self.publisher.publish(sensor_observation(self.events, sample))
+            a_text = f"{a.value_mg_l:.3f}" if a else f"MISSING (age {self.sensor_a.age_steps(state.sim_step)}, {self.sensor_a.quality(state.sim_step)})"
         log.info(
-            "step %d  flow %.2f L/s  accepted %.2f mg/s  delivery %.2f mg/s  residual %.4f  A %.3f  B %.3f",
-            state.sim_step, state.flow_l_s, state.accepted_feed_mg_s, state.actual_delivery_mg_s,
-            state.modeled_residual_mg_l, a.value_mg_l, b.value_mg_l,
+            "step %d  flow %.2f L/s  accepted %.2f mg/s  pump %s  delivery %.2f mg/s  residual %.4f  A %s  B %.3f",
+            state.sim_step, state.flow_l_s, state.accepted_feed_mg_s, "on" if state.pump_running else "OFF",
+            state.actual_delivery_mg_s, state.modeled_residual_mg_l, a_text, b.value_mg_l,
         )
         return snapshot
 
