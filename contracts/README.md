@@ -16,7 +16,7 @@ Event types: dose_request, dose_approval, command, acknowledgement, plant_feedba
 - Approvals include approval_id, request_id, approver_id, matching scope/value and expires_at_utc.
 - Commands include command_id, request_id, approval_id or null for the explicit lab case, actor_id, equipment_id and requested_feed_mg_s.
 - Acknowledgements include command_id, accepted boolean, accepted_feed_mg_s and reason.
-- Plant feedback includes equipment_id, flow_l_s, pump_running, actual_delivery_mg_s and modeled_residual_mg_l.
+- Plant feedback includes equipment_id, flow_l_s, pump_running, actual_delivery_mg_s and modeled_residual_mg_l. New plant runs also include accepted_feed_mg_s for the stopped-pump check. Older records may omit it.
 - Sensor observations include equipment_id, value in mg/L and quality good/uncertain/bad; retain null change_id for ordinary observations.
 - Lab actions identify actor_id, equipment_id, action and reason. The lab-unapproved path is local, disabled by default and auditable.
 
@@ -29,6 +29,8 @@ Publish copied events to POST http://127.0.0.1:5001/intake/events. The collector
 Use doseproof.db with raw_events, validation_errors, normalized_events, linked_evidence, source_health and verdicts. Store links to original raw receipt IDs. Raw attempts are preserved; uniqueness is applied to logical normalized identity, not by discarding receipt evidence. The collector is the sole database writer; other processing modules run within that write path or its single worker. The API opens SQLite in read-only mode.
 
 Evidence API at localhost 5002 provides GET /api/health, /api/events, /api/findings and /api/sources plus the dashboard page. Queries accept run_id and bounded limit; event queries may filter source_id/change_id. Reject invalid filters clearly. No treatment control or evidence mutation route exists on this listener. Collector POST is a separate interface, not a public dashboard API.
+
+GET /api/changes reads saved approval/response and labelled fault findings, with action receipts and bounded observation windows. The action deadline is ten seconds for the controller response after command. A missing copy is UNVERIFIED after the collector wait window and can be reevaluated if the original arrives. The stopped-pump check uses the first following plant record. The missing-A check requires ten subsequent plant and B observations without a new A record. These demo thresholds await team review.
 
 ## Model and verdicts
 

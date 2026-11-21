@@ -64,6 +64,7 @@ def plant_feedback(factory: EventFactory, state, equipment_id="dosing-pump-1") -
             "equipment_id": equipment_id,
             "flow_l_s": state.flow_l_s,
             "pump_running": state.pump_running,
+            "accepted_feed_mg_s": state.accepted_feed_mg_s,
             "actual_delivery_mg_s": state.actual_delivery_mg_s,
             "modeled_residual_mg_l": state.modeled_residual_mg_l,
         },

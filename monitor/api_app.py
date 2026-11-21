@@ -16,6 +16,8 @@ from werkzeug.serving import make_server
 
 from monitor.storage import open_read_only
 from monitor.validation import utc_time
+from monitor.assurance import ACTION_RULE, ACTION_TYPES, FAULT_RULE, evidence_rows, reference, step_observations
+from monitor.processing import RULE
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ('plant-model', 'sensor-a', 'sensor-b')
@@ -128,9 +130,36 @@ def create_app(path=None):
         run_id, limit = filters()
         with closing(open_read_only(app.config['DATABASE'])) as conn:
             run_id = selected_run(conn, run_id)
-            rows = conn.execute('SELECT recorded_at_utc,finding_json FROM verdicts WHERE run_id=? ORDER BY recorded_at_utc DESC LIMIT ?', (run_id, limit)).fetchall()
+            rows = conn.execute('SELECT recorded_at_utc,finding_json FROM verdicts WHERE run_id=? AND rule_id=? ORDER BY recorded_at_utc DESC LIMIT ?', (run_id, RULE, limit)).fetchall()
         return jsonify(run_id=run_id, items=[dict(json.loads(r['finding_json']), recorded_at_utc=r['recorded_at_utc']) for r in rows],
-                       scope='Only the implemented sensor/model consistency check; no approval assurance engine')
+                       scope='Same-step sensor/model consistency. Action and fault findings are available under /api/changes.')
+
+    @app.get('/api/changes')
+    def changes():
+        run_id, limit = filters()
+        with closing(open_read_only(app.config['DATABASE'])) as conn:
+            run_id = selected_run(conn, run_id)
+            rows = conn.execute('SELECT recorded_at_utc,finding_json FROM verdicts WHERE run_id=? '
+                                'AND rule_id IN (?,?) ORDER BY recorded_at_utc DESC, verdict_id LIMIT ?',
+                                (run_id, ACTION_RULE, FAULT_RULE, limit)).fetchall()
+            items = []
+            for row in rows:
+                finding = json.loads(row['finding_json'])
+                records = evidence_rows(conn, 'WHERE n.run_id=? AND n.change_id=? ORDER BY r.received_at_utc',
+                                        (run_id, finding['change_id']))
+                records = [record for record in records if record['event']['event_type'] in ACTION_TYPES]
+                anchors = [r['event'] for r in records if r['event']['event_type'] == (
+                    'acknowledgement' if finding['rule_id'] == ACTION_RULE else 'lab_action')]
+                observations = []
+                if len(anchors) == 1:
+                    first = int(anchors[0]['sim_step']) + 1
+                    window = 8 if finding['rule_id'] == ACTION_RULE else 10
+                    observations = step_observations(conn, run_id, first, first + window - 1)
+                items.append({**finding, 'recorded_at_utc': row['recorded_at_utc'],
+                              'actions': [{**reference(r), 'event': r['event']} for r in records],
+                              'observations': [{**reference(r), 'event': r['event']} for r in observations]})
+        return jsonify(run_id=run_id, items=items,
+                       observation_scope='Same-run observations after the anchor step. They retain their original identities and do not establish causation.')
 
     @app.get('/api/sources')
     def sources():

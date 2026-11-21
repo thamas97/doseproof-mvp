@@ -1,0 +1,352 @@
+{
+  "devices": {
+    "0": {
+      "id": "0",
+      "name": "FUXA Server",
+      "type": "FuxaServer",
+      "property": {},
+      "polling": 1000,
+      "enabled": true,
+      "tags": {}
+    },
+    "d_doseproof_evidence": {
+      "id": "d_doseproof_evidence",
+      "name": "DoseProof Evidence API",
+      "type": "WebAPI",
+      "enabled": true,
+      "property": {
+        "address": "http://127.0.0.1:25202/api/sources"
+      },
+      "polling": 1000,
+      "tags": {
+        "t_dp_flow": {
+          "id": "t_dp_flow",
+          "name": "Water flow",
+          "address": "items:[0]:sample:payload:flow_l_s",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_delivery": {
+          "id": "t_dp_delivery",
+          "name": "Actual pump delivery",
+          "address": "items:[0]:sample:payload:actual_delivery_mg_s",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_residual": {
+          "id": "t_dp_residual",
+          "name": "Modeled residual",
+          "address": "items:[0]:sample:payload:modeled_residual_mg_l",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_sensor_a": {
+          "id": "t_dp_sensor_a",
+          "name": "Sensor A residual",
+          "address": "items:[1]:sample:payload:value",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_sensor_b": {
+          "id": "t_dp_sensor_b",
+          "name": "Sensor B residual",
+          "address": "items:[2]:sample:payload:value",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_step": {
+          "id": "t_dp_step",
+          "name": "Simulation step",
+          "address": "items:[0]:sample:sim_step",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_plant_state": {
+          "id": "t_dp_plant_state",
+          "name": "Plant data",
+          "address": "items:[0]:state",
+          "type": "string",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_a_state": {
+          "id": "t_dp_a_state",
+          "name": "Sensor A data",
+          "address": "items:[1]:state",
+          "type": "string",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_b_state": {
+          "id": "t_dp_b_state",
+          "name": "Sensor B data",
+          "address": "items:[2]:state",
+          "type": "string",
+          "daq": {
+            "enabled": false
+          }
+        },
+        "t_dp_accepted": {
+          "id": "t_dp_accepted",
+          "name": "Accepted feed",
+          "address": "items:[0]:sample:payload:accepted_feed_mg_s",
+          "type": "number",
+          "daq": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  },
+  "hmi": {
+    "views": [
+      {
+        "id": "v_101088410ab-451012",
+        "name": "DoseProof Live Evidence",
+        "profile": {
+          "width": 1840,
+          "height": 810,
+          "bkcolor": "#091724ff",
+          "margin": 0,
+          "align": "topCenter",
+          "gridType": "fixed",
+          "viewRenderDelay": 0
+        },
+        "items": {
+          "VAL_dp_flow": {
+            "id": "VAL_dp_flow",
+            "type": "svg-ext-value",
+            "name": "Water flow",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Water flow",
+              "variableId": "t_dp_flow",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 2
+                }
+              ]
+            }
+          },
+          "VAL_dp_delivery": {
+            "id": "VAL_dp_delivery",
+            "type": "svg-ext-value",
+            "name": "Actual pump delivery",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Actual pump delivery",
+              "variableId": "t_dp_delivery",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 2
+                }
+              ]
+            }
+          },
+          "VAL_dp_residual": {
+            "id": "VAL_dp_residual",
+            "type": "svg-ext-value",
+            "name": "Modeled residual",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Modeled residual",
+              "variableId": "t_dp_residual",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 3
+                }
+              ]
+            }
+          },
+          "VAL_dp_sensor_a": {
+            "id": "VAL_dp_sensor_a",
+            "type": "svg-ext-value",
+            "name": "Sensor A residual",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Sensor A residual",
+              "variableId": "t_dp_sensor_a",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 3
+                }
+              ]
+            }
+          },
+          "VAL_dp_sensor_b": {
+            "id": "VAL_dp_sensor_b",
+            "type": "svg-ext-value",
+            "name": "Sensor B residual",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Sensor B residual",
+              "variableId": "t_dp_sensor_b",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 3
+                }
+              ]
+            }
+          },
+          "VAL_dp_step": {
+            "id": "VAL_dp_step",
+            "type": "svg-ext-value",
+            "name": "Simulation step",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Simulation step",
+              "variableId": "t_dp_step",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 0
+                }
+              ]
+            }
+          },
+          "VAL_dp_plant_state": {
+            "id": "VAL_dp_plant_state",
+            "type": "svg-ext-value",
+            "name": "Plant data",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Plant data",
+              "variableId": "t_dp_plant_state",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": []
+            }
+          },
+          "VAL_dp_a_state": {
+            "id": "VAL_dp_a_state",
+            "type": "svg-ext-value",
+            "name": "Sensor A data",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Sensor A data",
+              "variableId": "t_dp_a_state",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": []
+            }
+          },
+          "VAL_dp_b_state": {
+            "id": "VAL_dp_b_state",
+            "type": "svg-ext-value",
+            "name": "Sensor B data",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Sensor B data",
+              "variableId": "t_dp_b_state",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": []
+            }
+          },
+          "VAL_dp_accepted": {
+            "id": "VAL_dp_accepted",
+            "type": "svg-ext-value",
+            "name": "Accepted feed",
+            "label": "Value",
+            "property": {
+              "events": [],
+              "variable": "Accepted feed",
+              "variableId": "t_dp_accepted",
+              "variableSrc": "d_doseproof_evidence",
+              "ranges": [
+                {
+                  "type": "unit",
+                  "fractionDigits": 2
+                }
+              ]
+            }
+          },
+          "dp_operator_desk": {
+            "id": "dp_operator_desk",
+            "type": "svg-ext-own_ctrl-iframe",
+            "name": "DoseProof Operator Desk",
+            "label": "HtmlIframe",
+            "property": {
+              "address": "http://127.0.0.1:25200/",
+              "events": []
+            }
+          }
+        },
+        "variables": {},
+        "svgcontent": "<svg width=\"1840\" height=\"810\" viewBox=\"0 0 1840 810\" xmlns=\"http://www.w3.org/2000/svg\">\n<rect width=\"1840\" height=\"810\" fill=\"#091724\"/>\n<g transform=\"translate(0 24)\">\n\n<defs>\n <linearGradient id=\"dp_bg\" x2=\"0\" y2=\"1\"><stop stop-color=\"#142c40\"/><stop offset=\"1\" stop-color=\"#091724\"/></linearGradient>\n <linearGradient id=\"dp_metal\"><stop stop-color=\"#244c66\"/><stop offset=\".25\" stop-color=\"#82a4b7\"/><stop offset=\".58\" stop-color=\"#476d85\"/><stop offset=\"1\" stop-color=\"#1e3b53\"/></linearGradient>\n <linearGradient id=\"dp_water\" x2=\"0\" y2=\"1\"><stop stop-color=\"#24bbb9\"/><stop offset=\"1\" stop-color=\"#0b748c\"/></linearGradient>\n <linearGradient id=\"dp_pump\" x2=\"1\" y2=\"1\"><stop stop-color=\"#61b7e6\"/><stop offset=\".55\" stop-color=\"#225b92\"/><stop offset=\"1\" stop-color=\"#103451\"/></linearGradient>\n <pattern id=\"dp_grid\" width=\"32\" height=\"32\" patternUnits=\"userSpaceOnUse\"><path d=\"M0 32V0H32\" fill=\"none\" stroke=\"#32495b\" stroke-opacity=\".34\"/></pattern>\n</defs>\n<rect width=\"1280\" height=\"760\" fill=\"#091724\"/>\n<rect x=\"22\" y=\"115\" width=\"1236\" height=\"571\" rx=\"20\" fill=\"url(#dp_bg)\" stroke=\"#314b61\"/>\n<rect x=\"23\" y=\"116\" width=\"1234\" height=\"569\" rx=\"20\" fill=\"url(#dp_grid)\"/>\n<rect x=\"32\" y=\"28\" width=\"4\" height=\"59\" rx=\"2\" fill=\"#51ddcf\"/>\n\n<text x=\"50\" y=\"40\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#61decf\">DOSEPROOF   /   SCADA PROCESS VIEW</text>\n<text x=\"48\" y=\"79\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"38\" font-weight=\"700\" fill=\"#f4f8fc\">Chlorine treatment line</text>\n<rect x=\"985\" y=\"32\" width=\"264\" height=\"47\" rx=\"23\" fill=\"#142b3b\" stroke=\"#305266\"/>\n<circle cx=\"1010\" cy=\"55\" r=\"5\" fill=\"#58d7c6\"/>\n<text x=\"1025\" y=\"60\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#dcebf5\">SIMULATION  /  READ ONLY</text>\n<text x=\"48\" y=\"151\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#9ab8cd\">PROCESS OVERVIEW</text>\n<text x=\"926\" y=\"151\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#9ab8cd\">Source: DoseProof Evidence API</text>\n<path d=\"M70 493L264 493L327 539L131 539Z\" fill=\"#0b1b2a\" stroke=\"#304b60\"/>\n<path d=\"M391 407L581 407L613 432L421 432Z\" fill=\"#0b1b2a\" stroke=\"#304b60\"/>\n<path d=\"M632 535L921 535L967 574L678 574Z\" fill=\"#0b1b2a\" stroke=\"#304b60\"/>\n<ellipse cx=\"780\" cy=\"532\" rx=\"144\" ry=\"40\" fill=\"#08131f\" opacity=\".77\"/>\n\n<path d=\"M91 482H661 M894 482H1164\" fill=\"none\" stroke=\"#06131f\" stroke-width=\"28\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n<path d=\"M91 482H661 M894 482H1164\" fill=\"none\" stroke=\"#4bd2df\" stroke-width=\"22\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n<path d=\"M514 350H590V482\" fill=\"none\" stroke=\"#06131f\" stroke-width=\"19\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n<path d=\"M514 350H590V482\" fill=\"none\" stroke=\"#f5b652\" stroke-width=\"13\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n<path d=\"M100 476H650 M898 476H1152\" stroke=\"#c3f6fb\" opacity=\".52\" stroke-width=\"3\" fill=\"none\"/>\n<path d=\"M250 471l16 11-16 11zM399 471l16 11-16 11zM1005 471l16 11-16 11zM1099 471l16 11-16 11z\" fill=\"#08364b\"/>\n<path d=\"M583 420l7 10 7-10z\" fill=\"#8a551a\"/>\n<circle cx=\"590\" cy=\"482\" r=\"9\" fill=\"#0f526b\" stroke=\"#c7f6ff\" stroke-width=\"2\"/>\n<path d=\"M91 451L142 451L159 463L108 463Z\" fill=\"#688ea5\"/>\n<path d=\"M91 451H108V506H91Z\" fill=\"#416883\"/>\n<path d=\"M108 463H159V506H108Z\" fill=\"url(#dp_metal)\" stroke=\"#27465c\"/>\n<ellipse cx=\"157\" cy=\"483\" rx=\"8\" ry=\"17\" fill=\"#234c63\" stroke=\"#8db8ca\"/>\n<path d=\"M1158 462h31v41h-31z\" fill=\"url(#dp_metal)\" stroke=\"#7a9bab\"/>\n<ellipse cx=\"1189\" cy=\"483\" rx=\"9\" ry=\"21\" fill=\"#123248\" stroke=\"#7a9bab\"/>\n<ellipse cx=\"1189\" cy=\"483\" rx=\"5\" ry=\"12\" fill=\"#4bd2df\"/>\n\n<path d=\"M323 272h65v103c0 15-65 15-65 0Z\" fill=\"url(#dp_metal)\" stroke=\"#a5bac7\"/>\n<ellipse cx=\"355.5\" cy=\"272\" rx=\"32.5\" ry=\"11\" fill=\"#8daabc\" stroke=\"#c6d8e0\"/>\n<path d=\"M331 310h49v31h-49z\" fill=\"#f7bd64\" opacity=\".86\"/>\n<path d=\"M390 351h34\" stroke=\"#f5b652\" stroke-width=\"10\"/>\n<path d=\"M418 365l30-16h81l-19 22v36h-92z\" fill=\"#122a41\" stroke=\"#476a81\"/>\n<path d=\"M429 324h60c18 0 24 17 24 32s-8 29-24 29h-60z\" fill=\"url(#dp_pump)\" stroke=\"#77bbde\"/>\n<path d=\"M438 330v48m10-48v48m10-48v48m10-48v48m10-48v48\" stroke=\"#a1d9f1\" opacity=\".58\" stroke-width=\"2\"/>\n<ellipse cx=\"492\" cy=\"354\" rx=\"26\" ry=\"29\" fill=\"url(#dp_pump)\" stroke=\"#9dd0e7\" stroke-width=\"2\"/>\n<ellipse cx=\"492\" cy=\"354\" rx=\"13\" ry=\"15\" fill=\"#19364f\" stroke=\"#73adcc\"/>\n<path d=\"M492 344v20m-9-10h18\" stroke=\"#a4d2e6\" stroke-width=\"2\"/>\n\n<text x=\"337\" y=\"331\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"17\" font-weight=\"700\" fill=\"#382c21\">Cl</text>\n<text x=\"304\" y=\"402\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"13\" font-weight=\"500\" fill=\"#e8bb78\">Chlorine feed</text>\n<text x=\"431\" y=\"425\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\" fill=\"#dce9f5\">Dosing pump</text>\n<path d=\"M647 388V517c0 24 59 43 132 43s132-19 132-43V388Z\" fill=\"url(#dp_metal)\" stroke=\"#87a9bb\" stroke-width=\"2\"/>\n<path d=\"M670 423v82c0 18 48 34 109 34s109-16 109-34v-82Z\" fill=\"url(#dp_water)\" stroke=\"#abd1df\"/>\n<ellipse cx=\"779\" cy=\"423\" rx=\"109\" ry=\"31\" fill=\"#29aeb5\" stroke=\"#79e6e3\"/>\n<ellipse cx=\"779\" cy=\"388\" rx=\"132\" ry=\"39\" fill=\"#225775\" fill-opacity=\".5\" stroke=\"#b5d2df\" stroke-width=\"3\"/>\n<ellipse cx=\"779\" cy=\"387\" rx=\"119\" ry=\"32\" fill=\"none\" stroke=\"#7c9eaf\" stroke-width=\"2\"/>\n<path d=\"M688 458v51M869 458v51\" stroke=\"#b9edf2\" opacity=\".35\" stroke-width=\"3\"/>\n<path d=\"M742 369v58m78-58v58\" stroke=\"#b8d9e8\" stroke-width=\"5\" stroke-linecap=\"round\"/>\n<circle cx=\"742\" cy=\"424\" r=\"7\" fill=\"#69f2dd\" stroke=\"#102b3b\" stroke-width=\"2\"/>\n<circle cx=\"820\" cy=\"424\" r=\"7\" fill=\"#a7c7ff\" stroke=\"#102b3b\" stroke-width=\"2\"/>\n<path d=\"M742 369V324L707 289 M820 369V323L865 289\" fill=\"none\" stroke=\"#89aaba\" stroke-width=\"2\" stroke-dasharray=\"5 5\"/>\n<circle cx=\"742\" cy=\"365\" r=\"9\" fill=\"#3ca7ad\" stroke=\"#b4f3e7\"/>\n<circle cx=\"820\" cy=\"365\" r=\"9\" fill=\"#557cba\" stroke=\"#c7dcfb\"/>\n\n<text x=\"702\" y=\"508\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"19\" font-weight=\"700\" fill=\"#e2fbff\">CONTACT TANK</text>\n<rect x=\"49\" y=\"339\" width=\"205\" height=\"91\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"65\" y=\"365\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#65d9e3\">01  /  WATER INLET</text>\n<g id=\"VAL_dp_flow\" type=\"svg-ext-value\">\n<text x=\"65\" y=\"406\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"195\" y=\"405\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">L/s</text>\n<rect x=\"287\" y=\"174\" width=\"295\" height=\"82\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"303\" y=\"199\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#fac16c\">02  /  CHLORINE DOSING</text>\n<g id=\"VAL_dp_delivery\" type=\"svg-ext-value\">\n<text x=\"303\" y=\"236\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"401\" y=\"234\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"500\" fill=\"#b4cbdc\">mg/s actual delivery</text>\n<path d=\"M479 256v39l18 19\" fill=\"none\" stroke=\"#b39263\" stroke-width=\"2\" stroke-dasharray=\"5 5\"/>\n<rect x=\"624\" y=\"174\" width=\"216\" height=\"115\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"640\" y=\"199\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#6ae6d9\">SENSOR A  /  VIRTUAL</text>\n<g id=\"VAL_dp_sensor_a\" type=\"svg-ext-value\">\n<text x=\"640\" y=\"237\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"769\" y=\"236\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">mg/L</text>\n<g id=\"VAL_dp_a_state\" type=\"svg-ext-value\">\n<text x=\"640\" y=\"269\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\" fill=\"#f6d699\">&#8212;</text>\n</g>\n<rect x=\"860\" y=\"174\" width=\"216\" height=\"115\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"876\" y=\"199\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#a8c8ff\">SENSOR B  /  VIRTUAL</text>\n<g id=\"VAL_dp_sensor_b\" type=\"svg-ext-value\">\n<text x=\"876\" y=\"237\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"1005\" y=\"236\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">mg/L</text>\n<g id=\"VAL_dp_b_state\" type=\"svg-ext-value\">\n<text x=\"876\" y=\"269\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\" fill=\"#f6d699\">&#8212;</text>\n</g>\n<rect x=\"988\" y=\"349\" width=\"235\" height=\"89\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"1004\" y=\"375\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#65d9e3\">04  /  WATER OUTLET</text>\n<text x=\"1004\" y=\"401\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"16\" font-weight=\"600\" fill=\"#e4eff7\">Simulated treated water</text>\n<path d=\"M1103 438v28\" stroke=\"#78a3b9\" stroke-width=\"2\" stroke-dasharray=\"4 4\"/>\n<rect x=\"670\" y=\"563\" width=\"260\" height=\"91\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"687\" y=\"588\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#65d9e3\">03  /  MODELED RESIDUAL</text>\n<g id=\"VAL_dp_residual\" type=\"svg-ext-value\">\n<text x=\"687\" y=\"630\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"851\" y=\"628\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">mg/L</text>\n<rect x=\"288\" y=\"564\" width=\"283\" height=\"90\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"304\" y=\"589\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#f7c47d\">CONTROLLER ACCEPTED FEED</text>\n<g id=\"VAL_dp_accepted\" type=\"svg-ext-value\">\n<text x=\"304\" y=\"630\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"28\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"422\" y=\"628\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"500\" fill=\"#b4cbdc\">mg/s setting</text>\n<rect x=\"986\" y=\"547\" width=\"237\" height=\"107\" rx=\"14\" fill=\"#112739\" stroke=\"#2a4960\"/>\n<text x=\"1002\" y=\"572\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\" fill=\"#97b7cc\">SIMULATION STEP</text>\n<g id=\"VAL_dp_step\" type=\"svg-ext-value\">\n<text x=\"1002\" y=\"608\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"25\" font-weight=\"700\" fill=\"#f1f8ff\">&#8212;</text>\n</g>\n<text x=\"1002\" y=\"635\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">Plant data</text>\n<g id=\"VAL_dp_plant_state\" type=\"svg-ext-value\">\n<text x=\"1092\" y=\"635\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\" fill=\"#f6d699\">&#8212;</text>\n</g>\n<path d=\"M50 580h31\" stroke=\"#4bd2df\" stroke-width=\"5\" stroke-linecap=\"round\"/><path d=\"M50 607h31\" stroke=\"#f5b652\" stroke-width=\"5\" stroke-linecap=\"round\"/>\n<text x=\"95\" y=\"585\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">Water flow</text>\n<text x=\"95\" y=\"612\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"14\" font-weight=\"500\" fill=\"#b4cbdc\">Chlorine feed</text>\n<text x=\"47\" y=\"724\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"500\" fill=\"#b4cbdc\">A and B sample the same modeled water through separate virtual sensors. Source status applies to the displayed value.</text>\n<text x=\"991\" y=\"724\" font-family=\"Segoe UI,Arial,sans-serif\" font-size=\"15\" font-weight=\"650\" fill=\"#81b3c9\">Educational simulation</text>\n\n</g>\n<rect x=\"1277\" y=\"24\" width=\"541\" height=\"762\" rx=\"20\" fill=\"#102638\" stroke=\"#345066\"/>\n<g font-family=\"Segoe UI, Arial, sans-serif\">\n  <text x=\"1300\" y=\"57\" fill=\"#f6c47d\" font-size=\"14\" font-weight=\"700\">LOCAL SIMULATION   /   AUTHENTICATED CONTROLS</text>\n  <text x=\"1300\" y=\"90\" fill=\"#f3f9fe\" font-size=\"29\" font-weight=\"700\">Scenario controls</text>\n  <text x=\"1300\" y=\"117\" fill=\"#c0d8e9\" font-size=\"16\">Sign in with your assigned Operator Desk account.</text>\n  <text x=\"1300\" y=\"142\" fill=\"#c0d8e9\" font-size=\"16\">Start a fresh paused run, then resume to watch the response.</text>\n  <a href=\"http://127.0.0.1:25200/\" target=\"_blank\" rel=\"noopener noreferrer\">\n    <text x=\"1300\" y=\"166\" fill=\"#6be8da\" font-size=\"15\" text-decoration=\"underline\">Open Operator Desk in a full tab</text>\n  </a>\n</g>\n<g id=\"dp_operator_desk\" type=\"svg-ext-own_ctrl-iframe\">\n  <foreignObject x=\"1300\" y=\"182\" width=\"495\" height=\"580\">\n    <div xmlns=\"http://www.w3.org/1999/xhtml\" id=\"D-OXC_dp_operator_mount\" style=\"width:100%;height:100%;overflow:hidden;border-radius:10px\"></div>\n  </foreignObject>\n</g>\n</svg>",
+        "type": "svg"
+      }
+    ],
+    "layout": {
+      "autoresize": true,
+      "start": "v_101088410ab-451012",
+      "navigation": {
+        "mode": "over",
+        "type": "block",
+        "bkcolor": "#F4F5F7",
+        "fgcolor": "#1D1D1D",
+        "logo": false
+      },
+      "header": {
+        "bkcolor": "#ffffff",
+        "fgcolor": "#000000",
+        "height": 46,
+        "buttonHeight": 36,
+        "fontSize": 13,
+        "itemsAnchor": "left"
+      },
+      "showdev": false,
+      "inputdialog": "false",
+      "hidenavigation": true,
+      "theme": "",
+      "loginonstart": false,
+      "loginoverlaycolor": "none",
+      "show_connection_error": true,
+      "customStyles": "#home, #home #content { width: 100%; min-width: 0; } #home #content > svg { display: block; width: min(100%, 227.16vh); height: auto; margin-inline: auto; }"
+    }
+  },
+  "ar": {
+    "enabled": false,
+    "markers": []
+  },
+  "version": "1.00",
+  "name": "DoseProof Scenario Console",
+  "server": {
+    "id": "0",
+    "name": "FUXA Server",
+    "type": "FuxaServer",
+    "property": {},
+    "polling": 1000
+  }
+}

@@ -48,6 +48,10 @@ HOME = """<h3>Plant now (step {{ s.sim_step }})</h3>
  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="run_id" value="{{ run[0] }}">
  <button name="action" value="pause">Pause</button><button name="action" value="resume">Resume</button>
  <button name="action" value="reset">Reset to new paused run</button>
+ {% if lab_mode %}
+ <button name="action" value="stop-pump">Lab: stop pump</button>
+ <button name="action" value="suppress-a">Lab: suppress Sensor A</button>
+ {% endif %}
 </form>
 {% endif %}
 <table><tr><th>Flow L/s</th><th>Requested feed mg/s</th><th>Accepted feed mg/s</th><th>Actual delivery mg/s</th><th>Pump</th><th>Modeled residual mg/L</th></tr>

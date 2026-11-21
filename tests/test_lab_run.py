@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from monitor.collector_app import create_app as create_collector
+from monitor.api_app import create_app as create_api
 from plant.app import Plant
 from plant.config import ServiceSettings
 from plant.desk_web import create_desk_app
@@ -90,6 +91,14 @@ def test_reset_to_step_zero_then_apply_change_and_export(tmp_path, monkeypatch, 
         for line in records.splitlines():
             response = collector.post('/intake/events', data=line, content_type='application/json')
             assert response.status_code == 201, response.json
+        api = create_api(tmp_path / 'doseproof.db').test_client()
+        finding, = api.get('/api/changes').json['items']
+        assert finding['status'] == ('FAIL' if lab else 'PASS')
+        assert [row['event']['event_type'] for row in finding['actions']] == kinds
+        assert len(finding['observations']) == 24
+        assert all(row['event']['change_id'] is None for row in finding['observations'])
+        assert all(api.get('/api/receipts/' + row['receipt_id']).status_code == 200 for row in finding['actions'])
+        assert api.post('/api/changes').status_code == 405
         check = 'AC-02' if lab else 'AC-01'
         script = Path(__file__).resolve().parents[1] / 'scripts' / 'export-check.py'
         command = [sys.executable, str(script), '--run-id', plant.run_id, '--check-id', check,
