@@ -30,3 +30,15 @@ The expected modeled residual is 1.00 mg/L through step 4, then 1.10, 1.18, 1.24
 It attempts single (FC6), multiple (FC16) and read/write (FC23) writes on the observer only and reports each as REFUSED, with the feed registers unchanged. The private controller on 1503 is a separate endpoint that accepts only desk-registered commands.
 
 **Limitation.** The plant, observer, controller and DoseProof run on one laptop under one Windows account. Write refusal stops network writes through Modbus, but it is not isolation: a malicious process under the same account could read the desk password file, call the controller's port or alter local files. A real deployment would separate hosts, accounts and networks.
+
+## Independent startup and the demonstration package (DPM-24)
+
+Another member starts the plant on their own laptop by following [STARTUP-CHECKLIST.md](STARTUP-CHECKLIST.md) without verbal help, records the commit, environment and actual result of each step, and writes the finding. A run by the author on a clean copy is a rehearsal, not independent startup.
+
+For the package, list the original source-record files of the chosen runs with their SHA-256 fingerprints:
+
+```powershell
+.\.venv\Scripts\python.exe -m plant.evidence_manifest --run <run_id> --out C:\dp\dpm24-proof\source-record-manifest.json
+```
+
+The manifest only reads files. Re-running it later and comparing fingerprints shows whether an evidence file changed. `fuxa/doseproof-observer-project.json` is the reviewed FUXA export: Observer on 127.0.0.1:1502, device 1, 1000 ms polling and 13 holding-register tags named as in the contract.
