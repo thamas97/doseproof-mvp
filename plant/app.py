@@ -75,7 +75,8 @@ class Plant:
         a = None if self.sensor_a_suppressed else self.sensor_a.sample(state.modeled_residual_mg_l, state.sim_step)
         b = self.sensor_b.sample(state.modeled_residual_mg_l, state.sim_step)
         snapshot = build_snapshot(
-            state, self.sensor_a.last_sample, b, a.quality if a else 'unavailable', b.quality,
+            state, self.sensor_a.last_sample, b,
+            self.sensor_a.quality(state.sim_step), self.sensor_b.quality(state.sim_step),
             self.sensor_a.age_steps(state.sim_step), self.sensor_b.age_steps(state.sim_step),
             self.ack_counter,
         )
@@ -87,7 +88,10 @@ class Plant:
         log.info(
             "step %d  flow %.2f L/s  accepted %.2f mg/s  delivery %.2f mg/s  residual %.4f  A %s  B %.3f",
             state.sim_step, state.flow_l_s, state.accepted_feed_mg_s, state.actual_delivery_mg_s,
-            state.modeled_residual_mg_l, f'{a.value_mg_l:.3f}' if a else 'unavailable', b.value_mg_l,
+            state.modeled_residual_mg_l,
+            f'{a.value_mg_l:.3f}' if a else
+            f'missing (age {self.sensor_a.age_steps(state.sim_step)}, {self.sensor_a.quality(state.sim_step)})',
+            b.value_mg_l,
         )
         return snapshot
 

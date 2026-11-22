@@ -14,7 +14,7 @@ Import [the process overview](doseproof-process-overview.fuxap) into the demo FU
 
 The supplied project polls the demo evidence service at `http://127.0.0.1:25202/api/sources`. For another local setup, edit the **DoseProof Evidence API** device address to point to that setup's read-only `/api/sources` endpoint. Start the matching simulator, collector and evidence API before checking the display. The controller accepted feed requires the newer plant feedback field of that name. Freshness labels show whether displayed readings still describe current samples.
 
-The pump and tank drawings provide process context. The tank fill graphic does not measure water level. Check that the simulation step advances, flow is reported in L/s, delivered and accepted feed in mg/s, and both sensor readings in mg/L. During the missing-A rehearsal, the retained A reading should say unavailable while B remains fresh.
+The pump and tank drawings provide process context. The tank fill graphic does not measure water level. Check that the simulation step advances, flow is reported in L/s, delivered and accepted feed in mg/s, and both sensor readings in mg/L. During the missing-A rehearsal, the retained A reading turns uncertain at age 3 and unavailable at age 10 while B remains fresh.
 
 ## Interactive scenario console
 

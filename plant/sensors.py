@@ -22,6 +22,11 @@ class SensorSample:
     quality: str  # good / uncertain / bad
 
 
+# Same freshness policy as the evidence API (monitor/api_app.py): stale at 3, unavailable at 10.
+STALE_AFTER_STEPS = 3
+UNAVAILABLE_AFTER_STEPS = 10
+
+
 class SensorAdapter:
     def __init__(self, settings: SensorSettings) -> None:
         self.settings = settings
@@ -49,3 +54,13 @@ class SensorAdapter:
         if self.last_sample_step is None:
             return 65535
         return min(65535, current_step - self.last_sample_step)
+
+    def quality(self, current_step: int) -> str:
+        """Observer quality of the retained sample: good, uncertain (stale), unavailable.
+        A missing sample is never replaced by zero; the last real value is kept."""
+        age = self.age_steps(current_step)
+        if self.last_sample is None or age >= UNAVAILABLE_AFTER_STEPS:
+            return "unavailable"
+        if age >= STALE_AFTER_STEPS:
+            return "uncertain"
+        return "good"
